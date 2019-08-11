@@ -15,7 +15,7 @@ TRAIN:
     MAX_STEPS: 4
 
 DATASET:
-    DATA_DIR: 'data/'
+    DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/CLEVR_v1.0/data'
 
 
 

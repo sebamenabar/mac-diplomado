@@ -25,6 +25,65 @@ def load_MAC(cfg, vocab):
     model.train()
     return model, model_ema
 
+class HierarchicalMemory(nn.Module):
+    def __init__(self,
+                 num_categories=4,
+                 num_attributes_per_category=5,
+                 categories_key_size=256,
+                 attributes_key_size=256,
+                 value_size=512,
+                 dropout=0.1,
+                ):
+        super().__init__()
+        
+        self.num_categories = num_categories
+        self.num_attributes_per_category = num_attributes_per_category
+        
+        self.categories_key_size = categories_key_size
+        self.attributes_key_size = attributes_key_size
+        self.value_size = value_size
+        
+        self.categories = torch.FloatTensor(num_categories, categories_key_size)
+        self.attributes = torch.FloatTensor(num_categories, num_attributes_per_category, attributes_key_size)
+        
+        self.categories = nn.Parameter(self.categories)
+        self.attributes = nn.Parameter(self.attributes)
+        
+        if value_size is not None:
+            self.values = torch.FloatTensor(num_categories, num_attributes_per_category, value_size)
+            self.values = nn.Parameter(self.values)
+        else:
+            self.values = None
+        
+        self.dropout = nn.Dropout(dropout)
+        self._init_params()
+        
+    def _init_params(self):
+        nn.init.normal_(self.categories)
+        nn.init.normal_(self.attributes)
+        if self.values is not None:
+            nn.init.normal_(self.values)
+        
+    def forward(self, query):
+        
+        query = self.dropout(query)
+        category_attention = torch.matmul(query[:, :self.categories_key_size], self.categories.t())
+        category_attention = nn.functional.softmax(category_attention, dim=1)
+        
+        attribute_attention = torch.matmul(self.attributes, query[:, self.categories_key_size:].t())
+        attribute_attention = nn.functional.softmax(attribute_attention.permute(2, 0, 1), dim=2)
+        
+
+        if self.values is not None:
+            # attribute_attention = torch.matmul(attribute_attention, self.values.permute(1, 2, 0))
+            attribute_attention = (attribute_attention.unsqueeze(3) * self.values).sum(dim=2)
+        else:
+            attribute_attention = (attribute_attention.unsqueeze(3) * self.attributes).sum(dim=2)
+
+        category_attention = torch.matmul(category_attention.unsqueeze(1), attribute_attention).squeeze(1)
+        
+        return category_attention
+
 
 class ControlUnit(nn.Module):
     def __init__(self, cfg, module_dim, max_step=4):
@@ -39,6 +98,7 @@ class ControlUnit(nn.Module):
             self.control_input_u.append(nn.Linear(module_dim, module_dim))
 
         self.module_dim = module_dim
+        self.concept_memory = HierarchicalMemory()
 
     def mask(self, question_lengths, device):
         max_len = question_lengths.max().item()
@@ -79,6 +139,7 @@ class ControlUnit(nn.Module):
 
         # apply soft attention to current context words
         next_control = (attn * context).sum(1)
+        next_control = self.concept_memory(next_control)
 
         return next_control
 
