@@ -28,7 +28,7 @@ def load_MAC(cfg, vocab):
 class HierarchicalMemory(nn.Module):
     def __init__(self,
                  num_categories=4,
-                 num_attributes_per_category=5,
+                 num_attributes_per_category=8,
                  categories_key_size=256,
                  attributes_key_size=256,
                  value_size=512,
@@ -73,15 +73,20 @@ class HierarchicalMemory(nn.Module):
         attribute_attention = torch.matmul(self.attributes, query[:, self.categories_key_size:].t())
         attribute_attention = nn.functional.softmax(attribute_attention.permute(2, 0, 1), dim=2)
         
-
+        category_values = torch.matmul(category_attention, self.categories)
         if self.values is not None:
-            # attribute_attention = torch.matmul(attribute_attention, self.values.permute(1, 2, 0))
-            attribute_attention = (attribute_attention.unsqueeze(3) * self.values).sum(dim=2)
+            attribute_values = (attribute_attention.unsqueeze(3) * self.values).sum(dim=2)
         else:
-            attribute_attention = (attribute_attention.unsqueeze(3) * self.attributes).sum(dim=2)
+            attribute_values = (attribute_attention.unsqueeze(3) * self.attributes).sum(dim=2)
 
-        category_attention = torch.matmul(category_attention.unsqueeze(1), attribute_attention).squeeze(1)
+        values = torch.matmul(category_attention.unsqueeze(1), attribute_values).squeeze(1)
         
+        return values, category_values, category_attention, attribute_attention 
+
+    def get_category_attention(self, query):
+        category_attention = torch.matmul(query[:, :self.categories_key_size], self.categories.t())
+        category_attention = nn.functional.softmax(category_attention, dim=1)
+
         return category_attention
 
 
@@ -139,9 +144,10 @@ class ControlUnit(nn.Module):
 
         # apply soft attention to current context words
         next_control = (attn * context).sum(1)
-        next_control = self.concept_memory(next_control)
-
-        return next_control
+        # return next_control
+        
+        concept, category_embedding, _, _ = self.concept_memory(next_control)
+        return concept, category_embedding
 
 
 class ReadUnit(nn.Module):
@@ -157,6 +163,14 @@ class ReadUnit(nn.Module):
 
         self.activation = nn.ELU()
         self.module_dim = module_dim
+
+        self.program_interpretter = nn.Sequential(
+            # nn.Conv2d(module_dim + module_dim // 2, module_dim, kernel_size=1),
+            nn.Linear(module_dim + module_dim // 2, module_dim),
+            nn.ReLU(),
+            # nn.Conv2d(module_dim, module_dim, kernel_size=1),
+            nn.Linear(module_dim, module_dim)
+        )
 
     def forward(self, memory, know, control, memDpMask=None):
         """
@@ -193,15 +207,29 @@ class ReadUnit(nn.Module):
         interactions = self.concat_2(interactions)
 
         ## Step 2: compute interactions with control
-        control = control.unsqueeze(1)
-        interactions = interactions * control
-        interactions = self.activation(interactions)
+        # control = control.unsqueeze(1)
+        # interactions = interactions * control
+        # interactions = self.activation(interactions)
+
+        concept, program_embedding = control
+        # print('interactions', interactions.size())
+        # print('concepts', concept.size())
+        # print('program embeddings', program_embedding.size())
+        program_embedding = program_embedding.unsqueeze(1).expand(program_embedding.size(0), interactions.size(1), self.module_dim // 2)
+        # print('program embeddings', program_embedding.size())
+        interactions = torch.cat([interactions, program_embedding], -1)
+        interactions = self.program_interpretter(interactions)
+        # print('interactions', interactions.size())
 
         ## Step 3: sum attentions up over the knowledge base
         # transform vectors to attention distribution
         interactions = self.dropout(interactions)
-        attn = self.attn(interactions).squeeze(-1)
+        # attn = self.attn(interactions).squeeze(-1)
+        # print(concept.size())
+        attn = (interactions * concept.unsqueeze(1)).sum(dim=2)
         attn = F.softmax(attn, 1)
+        # print(attn)
+
 
         # sum up the knowledge base according to the distribution
         attn = attn.unsqueeze(-1)
