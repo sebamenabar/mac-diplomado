@@ -28,7 +28,8 @@ class ClevrDataset(data.Dataset):
 
         with open(os.path.join(data_dir, '{}.pkl'.format(split)), 'rb') as f:
             self.data = pickle.load(f)
-        self.img = h5py.File(os.path.join(data_dir, '{}_features.hdf5'.format(split)), 'r')['data']
+        self.img = h5py.File(os.path.join(data_dir, '{}_features.h5'.format(split)), 'r')['features'] # ['data']
+        # self.img = h5py.File(os.path.join(data_dir, '{}_features.hdf5'.format(split)), 'r')['data']
 
     def __getitem__(self, index):
         imgfile, question, answer, family = self.data[index]
