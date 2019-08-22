@@ -217,8 +217,9 @@ class WriteUnit(nn.Module):
         self.linear = nn.Linear(module_dim * 2, module_dim)
 
     def forward(self, memory, info):
-        newMemory = torch.cat([memory, info], -1)
-        newMemory = self.linear(newMemory)
+        # newMemory = torch.cat([memory, info], -1)
+        # newMemory = self.linear(newMemory)
+        newMemory = info
 
         return newMemory
 
