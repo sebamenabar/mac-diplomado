@@ -98,7 +98,7 @@ class ControlUnit(nn.Module):
             self.control_input_u.append(nn.Linear(module_dim, module_dim))
 
         self.module_dim = module_dim
-        self.concept_memory = HierarchicalMemory()
+        # self.concept_memory = HierarchicalMemory()
 
     def mask(self, question_lengths, device):
         max_len = question_lengths.max().item()
