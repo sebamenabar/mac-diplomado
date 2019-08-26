@@ -98,7 +98,6 @@ class ControlUnit(nn.Module):
             self.control_input_u.append(nn.Linear(module_dim, module_dim))
 
         self.module_dim = module_dim
-        # self.concept_memory = HierarchicalMemory()
 
     def mask(self, question_lengths, device):
         max_len = question_lengths.max().item()
@@ -107,6 +106,16 @@ class ControlUnit(nn.Module):
         ones = torch.ones_like(mask)
         mask = (ones - mask) * (1e-30)
         return mask
+
+    @staticmethod
+    def mask_by_length(x, lengths, device=None):
+        lengths = torch.as_tensor(lengths, dtype=torch.float32, device=device)
+        max_len = max(lengths)
+        mask = torch.arange(max_len, device=device).expand(len(lengths), int(max_len)) < lengths.unsqueeze(1)
+        mask = mask.float().unsqueeze(2)
+        x_masked = x * mask + (1 - 1 / mask)
+
+        return x_masked
 
     def forward(self, question, context, question_lengths, step):
         """
@@ -131,15 +140,11 @@ class ControlUnit(nn.Module):
         # compute attention distribution over words and summarize them accordingly
         logits = self.attn(interactions)
 
-        # TODO: add mask again?!
-        # question_lengths = torch.cuda.FloatTensor(question_lengths)
-        # mask = self.mask(question_lengths, logits.device).unsqueeze(-1)
-        # logits += mask
+        logits = self.mask_by_length(logits, question_lengths, device=context.device)
         attn = F.softmax(logits, 1)
 
         # apply soft attention to current context words
         next_control = (attn * context).sum(1)
-        # next_control = self.concept_memory(next_control)
 
         return next_control
 
