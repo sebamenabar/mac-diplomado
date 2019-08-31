@@ -8,7 +8,7 @@ from utils import *
 
 def load_MAC(cfg, vocab):
     kwargs = {'vocab': vocab,
-              'max_step': cfg.TRAIN.MAX_STEPS
+              # 'max_step': cfg.TRAIN.MAX_STEPS
               }
 
     model = MACNetwork(cfg, **kwargs)
@@ -26,18 +26,22 @@ def load_MAC(cfg, vocab):
     return model, model_ema
 
 class ControlUnit(nn.Module):
-    def __init__(self, cfg, module_dim, max_step=4):
+    def __init__(self,
+                 module_dim,
+                 max_step=4,
+                 separate_syntax_semantics=False,
+                ):
         super().__init__()
-        self.cfg = cfg
         self.attn = nn.Linear(module_dim, 1)
-        self.control_input = nn.Sequential(nn.Linear(module_dim, module_dim),
-                                           nn.Tanh())
+        # self.control_input = nn.Sequential(nn.Linear(module_dim, module_dim),
+        #                                    nn.Tanh())
 
         self.control_input_u = nn.ModuleList()
         for i in range(max_step):
             self.control_input_u.append(nn.Linear(module_dim, module_dim))
 
         self.module_dim = module_dim
+        self.separate_syntax_semantics = separate_syntax_semantics
 
     def mask(self, question_lengths, device):
         max_len = max(question_lengths)
@@ -70,21 +74,26 @@ class ControlUnit(nn.Module):
             step: which step in the reasoning chain
         """
         # compute interactions with question words
-        question = self.control_input(question)
+        # question = self.control_input(question)
+        if self.separate_syntax_semantics:
+            syntactics, semantics = context
+        else:
+            syntactics, semantics = context, context
+
         question = self.control_input_u[step](question)
 
         newContControl = question
         newContControl = torch.unsqueeze(newContControl, 1)
-        interactions = newContControl * context
+        interactions = newContControl * syntactics
 
         # compute attention distribution over words and summarize them accordingly
         logits = self.attn(interactions)
 
-        logits = self.mask_by_length(logits, question_lengths, device=context.device)
+        logits = self.mask_by_length(logits, question_lengths, device=syntactics.device)
         attn = F.softmax(logits, 1)
 
         # apply soft attention to current context words
-        next_control = (attn * context).sum(1)
+        next_control = (attn * semantics).sum(1)
 
         return next_control
 
@@ -156,26 +165,47 @@ class ReadUnit(nn.Module):
 
 
 class WriteUnit(nn.Module):
-    def __init__(self, cfg, module_dim):
+    def __init__(self, module_dim, rtom=True):
         super().__init__()
-        self.cfg = cfg
-        self.linear = nn.Linear(module_dim * 2, module_dim)
-
+        self.rtom = rtom
+        if self.rtom is False:
+            self.linear = nn.Linear(module_dim * 2, module_dim)
+        else:
+            self.linear = None
+        
     def forward(self, memory, info):
-        # newMemory = torch.cat([memory, info], -1)
-        # newMemory = self.linear(newMemory)
-        newMemory = info
+        if self.rtom:
+            newMemory = info
+        else:
+            newMemory = torch.cat([memory, info], -1)
+            newMemory = self.linear(newMemory)
 
         return newMemory
 
 
 class MACUnit(nn.Module):
-    def __init__(self, cfg, module_dim=512, max_step=4):
+    def __init__(self, units_cfg, module_dim=512, max_step=4):
         super().__init__()
         self.cfg = cfg
-        self.control = ControlUnit(cfg, module_dim, max_step)
-        self.read = ReadUnit(module_dim)
-        self.write = WriteUnit(cfg, module_dim)
+        self.control = ControlUnit(
+            **{
+                'module_dim': module_dim,
+                'max_step': max_step,
+                **units_cfg.common,
+                **units_cfg.control_unit
+            })
+        self.read = ReadUnit(
+            **{
+                'module_dim': module_dim,
+                **units_cfg.common,
+                **units_cfg.read_unit,
+            })
+        self.write = WriteUnit(
+            **{
+                'module_dim': module_dim,
+                **units_cfg.common,
+                **units_cfg.write_unit,
+            })
 
         self.initial_memory = nn.Parameter(torch.zeros(1, module_dim))
 
@@ -209,11 +239,21 @@ class MACUnit(nn.Module):
 
 
 class InputUnit(nn.Module):
-    def __init__(self, cfg, vocab_size, wordvec_dim=300, rnn_dim=512, module_dim=512, bidirectional=True):
+    def __init__(self,
+                 vocab_size,
+                 wordvec_dim=300,
+                 rnn_dim=512,
+                 module_dim=512,
+                 bidirectional=True,
+                 separate_syntax_semantics=False,
+                 separate_syntax_semantics_embeddings=False,
+                ):
         super(InputUnit, self).__init__()
 
         self.dim = module_dim
-        self.cfg = cfg
+        self.wordvec_dim = wordvec_dim
+        self.separate_syntax_semantics = separate_syntax_semantics
+        self.separate_syntax_semantics_embeddings = separate_syntax_semantics and separate_syntax_semantics_embeddings
 
         self.stem = nn.Sequential(nn.Dropout(p=0.18),
                                   nn.Conv2d(1024, module_dim, 3, 1, 1),
@@ -226,8 +266,10 @@ class InputUnit(nn.Module):
         if bidirectional:
             rnn_dim = rnn_dim // 2
 
-        self.encoder_embed = nn.Embedding(vocab_size, wordvec_dim)
         self.encoder = nn.LSTM(wordvec_dim, rnn_dim, batch_first=True, bidirectional=bidirectional)
+        if self.separate_syntax_semantics_embeddings:
+            wordvec_dim *= 2
+        self.encoder_embed = nn.Embedding(vocab_size, wordvec_dim)
         self.embedding_dropout = nn.Dropout(p=0.15)
         self.question_dropout = nn.Dropout(p=0.08)
 
@@ -242,15 +284,24 @@ class InputUnit(nn.Module):
         # get question and contextual word embeddings
         embed = self.encoder_embed(question)
         embed = self.embedding_dropout(embed)
+        if self.separate_syntax_semantics_embeddings:
+            semantics = embed[:, :, self.wordvec_dim:]
+            embed = embed[:, :, :self.wordvec_dim]
+        else:
+            semantics = embed
+        
         embed = nn.utils.rnn.pack_padded_sequence(embed, question_len, batch_first=True)
-
         contextual_words, (question_embedding, _) = self.encoder(embed)
+        
         if self.bidirectional:
             question_embedding = torch.cat([question_embedding[0], question_embedding[1]], -1)
         question_embedding = self.question_dropout(question_embedding)
 
         contextual_words, _ = nn.utils.rnn.pad_packed_sequence(contextual_words, batch_first=True)
-
+        
+        if self.separate_syntax_semantics:
+            contextual_words = (contextual_words, semantics)
+        
         return question_embedding, contextual_words, img
 
 
@@ -276,19 +327,36 @@ class OutputUnit(nn.Module):
 
 
 class MACNetwork(nn.Module):
-    def __init__(self, cfg, max_step, vocab):
+    def __init__(self, cfg, vocab, num_answers=28):
         super().__init__()
 
         self.cfg = cfg
+        if getattr(cfg.model, 'separate_syntax_semantics') is True:
+            cfg.model.input_unit.separate_syntax_semantics = True
+            cfg.model.control_unit.separate_syntax_semantics = True
+            
+        
         encoder_vocab_size = len(vocab['question_token_to_idx'])
+        
+        self.input_unit = InputUnit(
+            vocab_size=encoder_vocab_size,
+            **cfg.model.common,
+            **cfg.model.input_unit,
+        )
 
-        self.input_unit = InputUnit(cfg, vocab_size=encoder_vocab_size)
+        self.output_unit = OutputUnit(
+            num_answers=num_answers,
+            **cfg.model.common,
+            **cfg.model.output_unit,
+        )
 
-        self.output_unit = OutputUnit()
+        self.mac = MACUnit(
+            cfg.model,
+            max_step=cfg.model.max_step,
+            **cfg.model.common,
+        )
 
-        self.mac = MACUnit(cfg, max_step=max_step)
-
-        init_modules(self.modules(), w_init=self.cfg.TRAIN.WEIGHT_INIT)
+        init_modules(self.modules(), w_init=cfg.TRAIN.WEIGHT_INIT)
         nn.init.uniform_(self.input_unit.encoder_embed.weight, -1.0, 1.0)
         nn.init.normal_(self.mac.initial_memory)
 

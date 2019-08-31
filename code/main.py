@@ -20,7 +20,7 @@ from trainer import Trainer
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', dest='cfg_file', help='optional config file', default='shapes_train.yml', type=str)
+    parser.add_argument('--cfg', dest='cfg_file', help='optional config file', default=None, type=str)
     parser.add_argument('--gpu',  dest='gpu_id', type=str, default='0')
     parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
     parser.add_argument('--manualSeed', type=int, help='manual seed')
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         torch.cuda.manual_seed_all(args.manualSeed)
 
     if cfg.TRAIN.FLAG:
-        logdir = set_logdir(cfg.TRAIN.MAX_STEPS)
+        logdir = set_logdir(cfg.model.max_step)
         trainer = Trainer(logdir, cfg)
         trainer.train()
     else:

@@ -23,16 +23,32 @@ __C.TRAIN.SNAPSHOT_INTERVAL = 5
 __C.TRAIN.WEIGHT_INIT = "xavier_uniform"
 __C.TRAIN.CLIP_GRADS = True
 __C.TRAIN.CLIP = 8
-__C.TRAIN.MAX_STEPS = 4
+# __C.TRAIN.MAX_STEPS = 4
 __C.TRAIN.EALRY_STOPPING = True
 __C.TRAIN.PATIENCE = 5
 __C.TRAIN.VAR_DROPOUT = False
-__C.TRAIN = dict(__C.TRAIN)
+# __C.TRAIN = dict(__C.TRAIN)
+__C.TRAIN.RADAM = False
 
 # Dataset options
 __C.DATASET = edict()
 __C.DATASET.DATA_DIR = ''
-__C.DATASET = dict(__C.DATASET)
+# __C.DATASET = dict(__C.DATASET)
+__C.model = edict(
+    max_step=4,
+    separate_syntax_semantics=False,
+    common=edict(module_dim=512),
+    input_unit=edict(
+        wordvec_dim=300,
+        rnn_dim=512,
+        bidirectional=True,
+        separate_syntax_semantics_embeddings=False,
+        ),
+    control_unit=edict(),
+    read_unit=edict(),
+    write_unit=edict(rtom=False),
+    output_unit=edict(),
+)
 
 
 def _merge_a_into_b(a, b):
@@ -80,6 +96,6 @@ def cfg_from_file(filename):
     """Load a config file and merge it into the default options."""
     import yaml
     with open(filename, 'r') as f:
-        yaml_cfg = edict(yaml.load(f))
+        yaml_cfg = edict(yaml.safe_load(f))
 
     _merge_a_into_b(yaml_cfg, __C)

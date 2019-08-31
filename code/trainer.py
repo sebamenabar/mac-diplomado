@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 from utils import mkdir_p, save_model, load_vocab
 from datasets import ClevrDataset, collate_fn
 import mac
+from radam import RAdam
 
 
 class Logger(object):
@@ -79,7 +80,10 @@ class Trainer():
         self.vocab = load_vocab(cfg)
         self.model, self.model_ema = mac.load_MAC(cfg, self.vocab)
         self.weight_moving_average(alpha=0)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        if cfg.TRAIN.RADAM:
+            self.optimizer = RAdam(self.model.parameters(), lr=self.lr)
+        else:
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
 
         self.previous_best_acc = 0.0
         self.previous_best_epoch = 0
