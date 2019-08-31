@@ -5,7 +5,7 @@ CUDA: False
 TRAIN:
     FLAG: True
     LEARNING_RATE: 0.0001
-    BATCH_SIZE: 64
+    BATCH_SIZE: 32
     MAX_EPOCHS: 25
     SNAPSHOT_INTERVAL: 5
     WEIGHT_INIT: "xavier_uniform"
@@ -16,6 +16,3 @@ TRAIN:
 
 DATASET:
     DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/data'
-
-
-
