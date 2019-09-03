@@ -68,12 +68,14 @@ class Trainer():
         cudnn.benchmark = True
 
         # load dataset
-        self.dataset = ClevrDataset(data_dir=self.data_dir, split="train")
+        cogent = cfg.DATASET.congent
+        if not args.eval and not args.test:
+        self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent)
         self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
-                                       num_workers=cfg.WORKERS, drop_last=True, collate_fn=collate_fn)
+                                       num_workers=cfg.WORKERS, drop_last=False, collate_fn=collate_fn)
 
-        self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="val")
-        self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=200, drop_last=True,
+        self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="val" + cogent)
+        self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=256, drop_last=False,
                                          shuffle=False, num_workers=cfg.WORKERS, collate_fn=collate_fn)
 
         # load model
@@ -120,7 +122,7 @@ class Trainer():
             self.model_ema.eval()
 
     def reduce_lr(self):
-        epoch_loss = self.total_epoch_loss / float(len(self.dataset) // self.batch_size)
+        epoch_loss = self.total_epoch_loss # / float(len(self.dataset) // self.batch_size)
         lossDiff = self.prior_epoch_loss - epoch_loss
         if ((lossDiff < 0.015 and self.prior_epoch_loss < 0.5 and self.lr > 0.00002) or \
             (lossDiff < 0.008 and self.prior_epoch_loss < 0.15 and self.lr > 0.00001) or \
@@ -138,13 +140,14 @@ class Trainer():
 
     def train_epoch(self, epoch):
         cfg = self.cfg
-        avg_loss = 0
-        train_accuracy = 0
+        total_loss = 0
+        total_correct = 0
+        total_samples = 0
 
         self.labeled_data = iter(self.dataloader)
         self.set_mode("train")
 
-        dataset = tqdm(self.labeled_data)
+        dataset = tqdm(self.labeled_data, total=len(self.dataloader))
 
         for data in dataset:
             ######################################################
@@ -183,19 +186,28 @@ class Trainer():
             # (3) Log Progress
             ############################
             correct = scores.detach().argmax(1) == answer
-            accuracy = correct.sum().cpu().numpy() / answer.shape[0]
+            total_correct += correct.sum().cpu().item()
+            total_loss += loss.item() * answer.size(0)
+            total_samples += answer.size(0)
 
-            if avg_loss == 0:
-                avg_loss = loss.item()
-                train_accuracy = accuracy
-            else:
-                avg_loss = 0.99 * avg_loss + 0.01 * loss.item()
-                train_accuracy = 0.99 * train_accuracy + 0.01 * accuracy
-            self.total_epoch_loss += loss.item()
+            avg_loss = total_loss / total_samples
+            train_accuracy = total_correct / total_samples
+            # accuracy = correct.sum().cpu().numpy() / answer.shape[0]
+
+            # if avg_loss == 0:
+            #     avg_loss = loss.item()
+            #     train_accuracy = accuracy
+            # else:
+            #     avg_loss = 0.99 * avg_loss + 0.01 * loss.item()
+            #     train_accuracy = 0.99 * train_accuracy + 0.01 * accuracy
+            # self.total_epoch_loss += loss.item() * answer.size(0)
 
             dataset.set_description(
                 'Epoch: {}; Avg Loss: {:.5f}; Avg Train Acc: {:.5f}'.format(epoch + 1, avg_loss, train_accuracy)
             )
+
+        self.total_epoch_loss = avg_loss
+        print(self.total_epoch_loss)
 
         dict = {
             "avg_loss": avg_loss,
@@ -242,29 +254,32 @@ class Trainer():
         self.set_mode("validation")
 
         if mode == "train":
-            eval_data = iter(self.dataloader)
-            num_imgs = len(self.dataset)
+            loader = self.dataloader
+            # num_imgs = len(self.dataset)
         elif mode == "validation":
-            eval_data = iter(self.dataloader_val)
-            num_imgs = len(self.dataset_val)
+            loader = self.dataloader_val
+            # num_imgs = len(self.dataset_val)
 
-        batch_size = 200
-        total_iters = num_imgs // batch_size
-        if max_samples is not None:
-            max_iter = max_samples // batch_size
-        else:
-            max_iter = None
+        # batch_size = 256
+        # total_iters = num_imgs // batch_size
+        # if max_samples is not None:
+        #     max_iter = max_samples // batch_size
+        # else:
+        #     max_iter = None
 
-        all_accuracies = []
-        all_accuracies_ema = []
+        # all_accuracies = []
+        total_correct = 0
+        total_correct_ema = 0
+        total_samples = 0
+        # all_accuracies_ema = []
 
-        for _iteration in range(total_iters):
-            try:
-                data = next(eval_data)
-            except StopIteration:
-                break
-            if max_iter is not None and _iteration == max_iter:
-                break
+        for data in tqdm(loader, total=len(loader)):
+            # try:
+            #     data = next(eval_data)
+            # except StopIteration:
+            #     break
+            # if max_iter is not None and _iteration == max_iter:
+            #     break
 
             image, question, question_len, answer = data['image'], data['question'], data['question_length'], data['answer']
             answer = answer.long()
@@ -281,14 +296,18 @@ class Trainer():
                 scores_ema = self.model_ema(image, question, question_len)
 
             correct_ema = scores_ema.detach().argmax(1) == answer
-            accuracy_ema = correct_ema.sum().cpu().numpy() / answer.shape[0]
-            all_accuracies_ema.append(accuracy_ema)
+            total_correct_ema += correct_ema.sum().cpu().item()
+            # accuracy_ema = correct_ema.sum().cpu().numpy() / answer.shape[0]
+
+            # all_accuracies_ema.append(accuracy_ema)
 
             correct = scores.detach().argmax(1) == answer
-            accuracy = correct.sum().cpu().numpy() / answer.shape[0]
-            all_accuracies.append(accuracy)
+            total_correct += correct.sum().cpu().item()
+            # accuracy = correct.sum().cpu().numpy() / answer.shape[0]
+            # all_accuracies.append(accuracy)
+            total_samples += answer.size(0)
 
-        accuracy_ema = sum(all_accuracies_ema) / float(len(all_accuracies_ema))
-        accuracy = sum(all_accuracies) / float(len(all_accuracies))
+        accuracy_ema = total_correct_ema / total_samples
+        accuracy = total_correct / total_samples
 
         return accuracy, accuracy_ema

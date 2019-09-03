@@ -13,6 +13,12 @@ __C.GPU_ID = '0'
 __C.CUDA = True
 __C.WORKERS = 4
 
+__C.EVAL = False
+__C.TEST = False
+__C.TEST_BATCH_SIZE = 256
+__C.SAMPLE = False
+__C.resume_model = None
+__C.resume_model_ema = None
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.FLAG = True
@@ -33,6 +39,7 @@ __C.TRAIN.RADAM = False
 # Dataset options
 __C.DATASET = edict()
 __C.DATASET.DATA_DIR = ''
+__C.DATASET.COGENT = ''
 # __C.DATASET = dict(__C.DATASET)
 __C.model = edict(
     max_step=4,

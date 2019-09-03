@@ -22,15 +22,26 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', dest='cfg_file', help='optional config file', default=None, type=str)
     parser.add_argument('--gpu',  dest='gpu_id', type=str, default='0')
-    parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
+    parser.add_argument('--data-dir', dest='data_dir', type=str, default='')
     parser.add_argument('--manualSeed', type=int, help='manual seed')
+    parser.add_argument('--cogent', type=str)
+    parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--test', action='store_true')
+    parser.add_argument('--logdir', type=str)
+    parser.add_argument('--resume-model', type=str)
+    parser.add_argument('--resume-model-ema', type=str)
+    parser.add_argument('--bsz', type=int)
+    parser.add_argument('--sample', action='store_true')
     args = parser.parse_args()
     return args
 
 
-def set_logdir(max_steps):
+def set_logdir(max_steps, logdir=None):
     now = datetime.datetime.now(dateutil.tz.tzlocal())
-    logdir = "data/{}_max_steps_{}".format(now, max_steps)
+    if logdir is None:
+        logdir = "data/{}_max_steps_{}".format(now, max_steps)
+    else:
+        logdir = f'data/{logdir}'
     mkdir_p(logdir)
     print("Saving output to: {}".format(logdir))
     code_dir = os.path.join(os.getcwd(), "code")
@@ -48,19 +59,50 @@ if __name__ == "__main__":
         cfg_from_file(args.cfg_file)
     if args.gpu_id != -1:
         cfg.GPU_ID = args.gpu_id
+    if args.gpu_id == '-1':
+        cfg.CUDA = False
     if args.data_dir != '':
-        cfg.DATA_DIR = args.data_dir
+        cfg.DATASET.DATA_DIR = args.data_dir
     if args.manualSeed is None:
         args.manualSeed = random.randint(1, 10000)
+    if args.cogent is not None:
+        cfg.DATASET.COGENT = args.cogent.upper()
+    if args.resume_model is not None:
+        cfg.resume_model = args.resume_model
+        cfg.resume_model_ema = args.resume_model_ema
+    if args.bsz is not None:
+        cfg.TEST_BATCH_SIZE = args.bsz
+        cfg.TRAIN.BATCH_SIZE = args.bsz
+    cfg.SAMPLE = args.sample
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
     if cfg.CUDA:
         torch.cuda.manual_seed_all(args.manualSeed)
 
+    if args.eval or args.test:
+        cfg.TRAIN.FLAG = False
+    if args.test:
+        cfg.TEST = True
+        args.EVAL = False
+    cfg.EVAL = args.eval
+    print(args)
+
+    logdir = set_logdir(cfg.model.max_step)
+    trainer = Trainer(logdir, cfg)
+
     if cfg.TRAIN.FLAG:
-        logdir = set_logdir(cfg.model.max_step)
-        trainer = Trainer(logdir, cfg)
+        # logdir = set_logdir(cfg.model.max_step)
+        # trainer = Trainer(logdir, cfg)
         trainer.train()
-    else:
-        raise NotImplementedError
+    elif cfg.EVAL or cfg.TEST:
+        mode = 'validation' if cfg.EVAL else 'test'
+        accuracy, accuracy_ema = trainer.calc_accuracy(mode)
+
+        print(f'Acc: {accuracy:.4f}')
+        print(f'Acc EMA: {accuracy_ema:.4f}')
+
+    # elif cfg.TEST:
+    #     accuracy, accuracy_ema = trainer.calc_accuracy('test')
+
+        # raise NotImplementedError
 
