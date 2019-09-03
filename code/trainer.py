@@ -101,7 +101,7 @@ class Trainer():
 
         self.start_epoch = 0
         if cfg.resume_model:
-            location = 'gpu' if cfg.CUDA else 'cpu'
+            location = 'cuda' if cfg.CUDA else 'cpu'
             state = torch.load(cfg.resume_model, map_location=location)
             self.model.load_state_dict(state['model'])
             self.optimizer.load_state_dict(state['optim'])
@@ -171,7 +171,7 @@ class Trainer():
         self.labeled_data = iter(self.dataloader)
         self.set_mode("train")
 
-        dataset = tqdm(self.labeled_data, total=len(self.dataloader))
+        dataset = tqdm(self.labeled_data, total=len(self.dataloader), ncols=20)
 
         for data in dataset:
             ######################################################
@@ -295,7 +295,7 @@ class Trainer():
         total_correct_ema = 0
         total_samples = 0
         # all_accuracies_ema = []
-        pbar = tqdm(loader, total=len(loader), desc=mode.upper())
+        pbar = tqdm(loader, total=len(loader), desc=mode.upper(), ncols=20)
         for data in pbar:
             # try:
             #     data = next(eval_data)
