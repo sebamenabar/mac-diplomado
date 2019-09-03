@@ -19,6 +19,7 @@ __C.TEST_BATCH_SIZE = 256
 __C.SAMPLE = False
 __C.resume_model = None
 __C.resume_model_ema = None
+__C.start_epoch = None
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.FLAG = True
