@@ -109,6 +109,9 @@ class Trainer():
             state = torch.load(cfg.resume_model_ema, map_location=location)
             self.model_ema.load_state_dict(state['model'])
 
+        if cfg.start_epoch is not None:
+            self.start_epoch = cfg.start_epoch
+
         self.previous_best_acc = 0.0
         self.previous_best_epoch = 0
 
@@ -252,7 +255,7 @@ class Trainer():
         self.save_models(self.max_epochs)
         self.writer.close()
         print("Finished Training")
-        print("Highest validation accuracy: {} at epoch {}")
+        print(f"Highest validation accuracy: {self.previous_best_acc} at epoch {self.previous_best_epoch}")
 
     def log_results(self, epoch, dict, max_eval_samples=None):
         epoch += 1
