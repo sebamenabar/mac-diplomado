@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--sample', action='store_true')
     parser.add_argument('--start-epoch', type=int)
     parser.add_argument('--epochs', type=int)
+    parser.add_argument('--workers', type=int)
     args = parser.parse_args()
     return args
 
@@ -79,6 +80,9 @@ if __name__ == "__main__":
         cfg.start_epoch = args.start_epoch
     if args.epochs is not None:
         cfg.TRAIN.MAX_EPOCHS = args.epochs
+    if args.workers is not None:
+        cfg.WORKERS = args.workers
+
     cfg.SAMPLE = args.sample
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
