@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument('--resume-model-ema', type=str)
     parser.add_argument('--bsz', type=int)
     parser.add_argument('--sample', action='store_true')
+    parser.add_argument('--workers', type=int)
     args = parser.parse_args()
     return args
 
@@ -73,6 +74,9 @@ if __name__ == "__main__":
     if args.bsz is not None:
         cfg.TEST_BATCH_SIZE = args.bsz
         cfg.TRAIN.BATCH_SIZE = args.bsz
+    if args.workers is not None:
+        cfg.WORKERS = args.workers
+
     cfg.SAMPLE = args.sample
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
