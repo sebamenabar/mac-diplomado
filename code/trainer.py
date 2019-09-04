@@ -69,6 +69,8 @@ class Trainer():
 
         # load dataset
         cogent = cfg.DATASET.COGENT
+        if cogent:
+            print(f'Using CoGenT {cogent.upper()}')
         sample = cfg.SAMPLE
         if cfg.TRAIN.FLAG:
             self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample)

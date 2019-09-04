@@ -12,6 +12,7 @@ cfg = __C
 __C.GPU_ID = '0'
 __C.CUDA = True
 __C.WORKERS = 4
+__C.LOGDIR = None
 
 __C.EVAL = False
 __C.TEST = False
