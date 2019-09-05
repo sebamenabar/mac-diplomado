@@ -35,6 +35,7 @@ class ControlUnit(nn.Module):
         self.attn = nn.Linear(module_dim, 1)
         # self.control_input = nn.Sequential(nn.Linear(module_dim, module_dim),
         #                                    nn.Tanh())
+        self.cw_attn = nn.Identity()
 
         self.control_input_u = nn.ModuleList()
         for i in range(max_step):
@@ -91,6 +92,7 @@ class ControlUnit(nn.Module):
 
         logits = self.mask_by_length(logits, question_lengths, device=syntactics.device)
         attn = F.softmax(logits, 1)
+        attn = self.cw_attn(attn)
 
         # apply soft attention to current context words
         next_control = (attn * semantics).sum(1)
@@ -111,6 +113,7 @@ class ReadUnit(nn.Module):
 
         self.activation = nn.ELU()
         self.module_dim = module_dim
+        self.kb_attn = nn.Identity()
 
     def forward(self, memory, know, control, memDpMask=None):
         """
@@ -156,6 +159,7 @@ class ReadUnit(nn.Module):
         interactions = self.dropout(interactions)
         attn = self.attn(interactions).squeeze(-1)
         attn = F.softmax(attn, 1)
+        attn = self.kb_attn(attn)
 
         # sum up the knowledge base according to the distribution
         attn = attn.unsqueeze(-1)
