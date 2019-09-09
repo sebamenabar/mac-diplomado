@@ -1,5 +1,5 @@
 GPU_ID: '-1'
-WORKERS: 4
+WORKERS: 1
 CUDA: False
 
 TRAIN:
@@ -19,17 +19,23 @@ DATASET:
     DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/CLEVR_v1.0/data'
 
 model:
-    max_step: 4
-    separate_syntax_semantics: True
+    max_step: 12
+    separate_syntax_semantics: False
     common:
-        module_dim: 256
+        module_dim: 512
     input_unit:
-        wordvec_dim: 256
-        rnn_dim: 256
+        wordvec_dim: 300
+        rnn_dim: 512
         bidirectional: True
         separate_syntax_semantics_embeddings: True
-    # control_unit:
+        stem_act: 'ELU'
+    control_unit:
+        control_feed_prev: True
+        control_cont_activation: 'TANH'
     # read_unit:
     write_unit:
-        rtom: True
+        rtom: False
+        self_attn: True
+        gate: True
+        gate_shared: False
     # output_unit: 
