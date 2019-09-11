@@ -1,6 +1,6 @@
-GPU_ID: '-1'
+GPU_ID: '0'
 WORKERS: 1
-CUDA: False
+CUDA: True
 
 TRAIN:
     FLAG: True
@@ -12,14 +12,14 @@ TRAIN:
     EALRY_STOPPING: True
     PATIENCE: 5
     CLIP_GRADS: True
-    RADAM: True
+    RADAM: False
     # MAX_STEPS: 4
 
 DATASET:
     DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/CLEVR_v1.0/data'
 
 model:
-    max_step: 12
+    max_step: 4
     separate_syntax_semantics: False
     common:
         module_dim: 512
@@ -27,12 +27,14 @@ model:
         wordvec_dim: 300
         rnn_dim: 512
         bidirectional: True
-        separate_syntax_semantics_embeddings: True
+        separate_syntax_semantics_embeddings: False
         stem_act: 'ELU'
     control_unit:
         control_feed_prev: True
         control_cont_activation: 'TANH'
-    # read_unit:
+    read_unit:
+        gate: True
+        num_lobs: 1
     write_unit:
         rtom: False
         self_attn: True
