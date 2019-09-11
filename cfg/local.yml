@@ -1,5 +1,5 @@
 GPU_ID: '-1'
-WORKERS: 4
+WORKERS: 1
 CUDA: False
 
 TRAIN:
