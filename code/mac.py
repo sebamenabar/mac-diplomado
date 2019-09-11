@@ -251,7 +251,7 @@ class WriteUnit(nn.Module):
                     dim_gate_out = module_dim
                 self.ctrl_gate_linear = nn.Linear(module_dim, dim_gate_out)
             else:
-                sel.ctrl_gate_linear = None
+                self.ctrl_gate_linear = None
         else:
             self.linear = None
 
