@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import sys
 
+import json
 import shutil
 from six.moves import range
 
@@ -21,7 +22,7 @@ from tensorboardX import SummaryWriter
 import mac as mac
 from radam import RAdam
 from datasets import ClevrDataset, collate_fn
-from utils import mkdir_p, save_model, load_vocab, cfg_to_exp_name
+from utils import mkdir_p, save_model, load_vocab, cfg_to_exp_name, flatten_json_iterative_solution
 
 
 class Logger(object):
@@ -135,9 +136,13 @@ class Trainer():
         exp_name = cfg_to_exp_name(cfg)
         print(exp_name)
         self.comet_exp.set_name(exp_name)
-        self.comet_exp.log_parameters(cfg)
+        self.comet_exp.log_parameters(flatten_json_iterative_solution(cfg))
         self.comet_exp.log_asset(self.logfile)
+        self.comet_exp.log_asset_data(json.dumps(cfg), file_name='cfg.json')
         self.comet_exp.set_model_graph(str(self.model))
+        if cfg.cfg_file:
+            self.comet_exp.log_asset(cfg.cfg_file)
+
 
     def print_info(self):
         print('Using config:')
@@ -267,21 +272,22 @@ class Trainer():
             with self.comet_exp.train():
                 dict = self.train_epoch(epoch)
                 self.reduce_lr()
-                dict['epoch'] = epoch
+                dict['epoch'] = epoch + 1
                 dict['lr'] = self.lr
-                self.comet_exp.log_metrics(dict, epoch=epoch,)
+                self.comet_exp.log_metrics(dict, epoch=epoch + 1,)
 
             with self.comet_exp.validate():
                 dict = self.log_results(epoch, dict)
-                dict['epoch'] = epoch
+                dict['epoch'] = epoch + 1
                 dict['lr'] = self.lr
-                self.comet_exp.log_metrics(dict, epoch=epoch,)
+                self.comet_exp.log_metrics(dict, epoch=epoch + 1,)
 
 
             if cfg.TRAIN.EALRY_STOPPING:
                 if epoch - cfg.TRAIN.PATIENCE == self.previous_best_epoch:
                     break
 
+        self.comet_exp.log_asset(self.logfile)
         self.save_models(self.max_epochs)
         self.writer.close()
         print("Finished Training")

@@ -123,8 +123,11 @@ class ControlUnit(nn.Module):
 
 
 class ReadUnit(nn.Module):
-    def __init__(self, module_dim):
+    def __init__(self, module_dim, gate=False, num_lobs=0):
         super().__init__()
+
+        self.gate = gate
+        self.module_dim = module_dim
 
         self.concat = nn.Linear(module_dim * 2, module_dim)
         # self.concat_2 = nn.Linear(module_dim, module_dim)
@@ -134,8 +137,17 @@ class ReadUnit(nn.Module):
         self.mproj = nn.Linear(module_dim, module_dim)
 
         self.activation = nn.ELU()
-        self.module_dim = module_dim
         self.kb_attn_idty = nn.Identity()
+
+        if gate:
+            self.gate = nn.Linear(module_dim, 1)
+            self.gate_sigmoid = nn.Sigmoid()
+            self.lobs = nn.Parameter(torch.randn(num_lobs, module_dim))
+            # self.lobs_attn = nn.Linear(module_dim, 1)
+            self.lobs_attn_idty = nn.Identity()
+        else:
+            self.gate = self.lobs = self.gate_sigmoid = self.lobs_attn_idty = None
+        
 
     def forward(self, memory, know, control, memDpMask=None):
         """
@@ -152,6 +164,7 @@ class ReadUnit(nn.Module):
             memDpMask: variational dropout mask (if used)
                 [batchSize, memDim]
         """
+        bsz = memory.size(0)
         ## Step 1: knowledge base / memory interactions
         # compute interactions between knowledge base and memory
         know = self.dropout(know)
@@ -186,6 +199,23 @@ class ReadUnit(nn.Module):
         # sum up the knowledge base according to the distribution
         attn = attn.unsqueeze(-1)
         read = (attn * know).sum(1)
+
+        if self.gate:
+            # compute attention on lobs
+            lobs = self.lobs.unsqueeze(0).expand(bsz, *self.lobs.size())
+            lobs_interations = lobs * control
+            lobs_attn = self.attn(lobs_interations).squeeze(-1)
+            lobs_attn = F.softmax(lobs_attn, 1)
+            lobs_attn = self.lobs_attn_idty(lobs_attn)
+
+            lobs_attn = lobs_attn.unsqueeze(-1)
+            lobs_read = (lobs_attn * lobs).sum(1)
+
+            # compute gate
+            z = self.gate(control.squeeze(1))
+            z = self.gate_sigmoid(z)
+
+            read = z * read + (1 - z) * lobs_read
 
         return read
 
@@ -247,7 +277,7 @@ class WriteUnit(nn.Module):
 
             if self.gate:
                 control = self.ctrl_gate_linear(control)
-                z = F.sigmoid(control)
+                z = torch.sigmoid(control)
                 newMemory = newMemory * z + memory * (1 - z)
 
         return newMemory

@@ -68,6 +68,7 @@ if __name__ == "__main__":
     args = parse_args()
     cfg.logcomet = args.logcomet
     if args.cfg_file is not None:
+        cfg.cfg_file = args.cfg_file
         cfg_from_file(args.cfg_file)
     if args.gpu_id != -1:
         cfg.GPU_ID = args.gpu_id
@@ -97,6 +98,7 @@ if __name__ == "__main__":
     cfg.exp_name = cfg.LOGDIR
 
     cfg.SAMPLE = args.sample
+    cfg.manualSeed = args.manualSeed
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
     if cfg.CUDA:
