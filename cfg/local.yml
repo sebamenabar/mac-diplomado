@@ -6,7 +6,7 @@ TRAIN:
     FLAG: True
     LEARNING_RATE: 0.0001
     BATCH_SIZE: 64
-    MAX_EPOCHS: 25
+    MAX_EPOCHS: 3
     SNAPSHOT_INTERVAL: 5
     WEIGHT_INIT: "xavier_uniform"
     EALRY_STOPPING: True
@@ -29,7 +29,9 @@ model:
         bidirectional: True
         separate_syntax_semantics_embeddings: True
     # control_unit:
-    # read_unit:
+    read_unit:
+        gate: True
+        num_lobs: 10
     write_unit:
         rtom: True
     # output_unit: 
