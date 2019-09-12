@@ -120,6 +120,8 @@ class Trainer():
 
         self.previous_best_acc = 0.0
         self.previous_best_epoch = 0
+        self.previous_best_loss = 100
+        self.previous_best_loss_epoch = 0
 
         self.total_epoch_loss = 0
         self.prior_epoch_loss = 10
@@ -284,7 +286,8 @@ class Trainer():
 
 
             if cfg.TRAIN.EALRY_STOPPING:
-                if epoch - cfg.TRAIN.PATIENCE == self.previous_best_epoch:
+                if epoch - cfg.TRAIN.PATIENCE == self.previous_best_loss_epoch:
+                    print('Early stop')
                     break
 
         self.comet_exp.log_asset(self.logfile)
@@ -310,6 +313,9 @@ class Trainer():
         if metrics['acc'] > self.previous_best_acc:
             self.previous_best_acc = metrics['acc']
             self.previous_best_epoch = epoch
+        if metrics['loss'] < self.previous_best_loss:
+            self.previous_best_loss = metrics['loss']
+            self.previous_best_loss_epoch = epoch
 
         if epoch % self.snapshot_interval == 0:
             self.save_models(epoch)

@@ -129,6 +129,8 @@ def cfg_to_exp_name(cfg):
                 write += 's'
             else:
                 write += 'u'
+    if len(write) == 0:
+        write = 'std'
     
     exp_name = f'{max_step}'
     if sss:

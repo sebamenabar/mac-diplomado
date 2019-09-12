@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument('--resume-model', type=str)
     parser.add_argument('--resume-model-ema', type=str)
     parser.add_argument('--bsz', type=int)
+    parser.add_argument('--lr', type=float)
     parser.add_argument('--sample', action='store_true')
     parser.add_argument('--start-epoch', type=int)
     parser.add_argument('--epochs', type=int)
@@ -86,6 +87,8 @@ if __name__ == "__main__":
     if args.bsz is not None:
         cfg.TEST_BATCH_SIZE = args.bsz
         cfg.TRAIN.BATCH_SIZE = args.bsz
+    if args.lr is not None:
+        cfg.TRAIN.LEARNING_RATE = args.lr
     if args.start_epoch is not None:
         cfg.start_epoch = args.start_epoch
     if args.epochs is not None:
