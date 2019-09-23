@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 import mac as mac
 from radam import RAdam
-from datasets import ClevrDataset, collate_fn
+from datasets import ClevrDataset, collate_fn, GQADataset, collate_fn_gqa
 from utils import mkdir_p, save_model, load_vocab, cfg_to_exp_name, flatten_json_iterative_solution
 
 
@@ -74,26 +74,42 @@ class Trainer():
 
         # load dataset
         cogent = cfg.DATASET.COGENT
-        if cogent:
+        if cogent and cfg.DATASET.DATASET == 'clevr':
             print(f'Using CoGenT {cogent.upper()}')
         sample = cfg.SAMPLE
         if cfg.TRAIN.FLAG:
-            self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample)
-            self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
-                                        num_workers=cfg.WORKERS, drop_last=True, collate_fn=collate_fn)
+            if cfg.DATASET.DATASET == 'clevr':
+                self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample)
+                self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
+                                            num_workers=cfg.WORKERS, drop_last=True, collate_fn=collate_fn)
+            elif cfg.DATASET.DATASET == 'gqa':
+                self.dataset = GQADataset(data_dir=self.data_dir, split="train", sample=sample)
+                self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
+                                            num_workers=cfg.WORKERS, drop_last=True, collate_fn=collate_fn_gqa)
+
         else:
             self.dataset = []
             self.dataloader = []
 
         if cfg.TRAIN.FLAG or cfg.EVAL:
-            self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="val" + cogent, sample=sample)
-            self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
-                                            shuffle=False, num_workers=cfg.WORKERS, collate_fn=collate_fn)
+            if cfg.DATASET.DATASET == 'clevr':
+                self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="val" + cogent, sample=sample)
+                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
+                                                shuffle=False, num_workers=cfg.WORKERS, collate_fn=collate_fn)
+            elif cfg.DATASET.DATASET == 'gqa':
+                self.dataset_val = GQADataset(data_dir=self.data_dir, split="val", sample=sample)
+                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, shuffle=False,
+                                            num_workers=cfg.WORKERS, drop_last=False, collate_fn=collate_fn_gqa)
 
         elif cfg.TEST:
-            self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="test" + cogent, sample=sample)
-            self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
-                                            shuffle=False, num_workers=cfg.WORKERS, collate_fn=collate_fn)
+            if cfg.DATASET.DATASET == 'clevr':
+                self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="test" + cogent, sample=sample)
+                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
+                                                shuffle=False, num_workers=cfg.WORKERS, collate_fn=collate_fn)
+            elif cfg.DATASET.DATASET == 'gqa':
+                self.dataset_val = GQADataset(data_dir=self.data_dir, split="testdev", sample=sample)
+                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
+                                                shuffle=False, num_workers=cfg.WORKERS, collate_fn=collate_fn_gqa)
 
         # load model
         self.vocab = load_vocab(cfg)
@@ -130,7 +146,7 @@ class Trainer():
         self.loss_fn = torch.nn.CrossEntropyLoss().cuda()
 
         self.comet_exp = Experiment(
-            project_name=os.getenv('COMET_PROJECT_NAME'),
+            project_name=cfg.COMET_PROJECT_NAME,
             api_key=os.getenv('COMET_API_KEY'),
             workspace=os.getenv('COMET_WORKSPACE'),
             disabled=cfg.logcomet is False,
@@ -286,7 +302,8 @@ class Trainer():
 
 
             if cfg.TRAIN.EALRY_STOPPING:
-                if epoch - cfg.TRAIN.PATIENCE == self.previous_best_loss_epoch:
+                if epoch - cfg.TRAIN.PATIENCE == self.previous_best_epoch:
+                # if epoch - cfg.TRAIN.PATIENCE == self.previous_best_loss_epoch:
                     print('Early stop')
                     break
 
@@ -385,8 +402,3 @@ class Trainer():
             loss=avg_loss,
             loss_ema=avg_loss_ema
         )
-
-        # accuracy_ema = total_correct_ema / total_samples
-        # accuracy = total_correct / total_samples
-
-        # return accuracy, accuracy_ema

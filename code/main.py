@@ -27,23 +27,37 @@ load_dotenv()
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    
+    # Config
     parser.add_argument('--cfg', dest='cfg_file', help='optional config file', default=None, type=str)
     parser.add_argument('--gpu',  dest='gpu_id', type=str, default='0')
-    parser.add_argument('--data-dir', dest='data_dir', type=str, default='')
+    parser.add_argument('--workers', type=int)
     parser.add_argument('--manualSeed', type=int, help='manual seed')
-    parser.add_argument('--cogent', type=str)
-    parser.add_argument('--eval', action='store_true')
-    parser.add_argument('--test', action='store_true')
-    parser.add_argument('--logdir', type=str)
+
+    # Resume
+    parser.add_argument('--epochs', type=int)
+    parser.add_argument('--start-epoch', type=int)
     parser.add_argument('--resume-model', type=str)
     parser.add_argument('--resume-model-ema', type=str)
+
+    # Logs
+    parser.add_argument('--logdir', type=str)
+    parser.add_argument('--comet-project-name', type=str)
+    parser.add_argument('--logcomet', action='store_true')
+
+
+    # Optimizer
     parser.add_argument('--bsz', type=int)
     parser.add_argument('--lr', type=float)
+
+    # Data
+    parser.add_argument('--cogent', type=str)
+    parser.add_argument('--dataset', type=str)
+    parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--test', action='store_true')
     parser.add_argument('--sample', action='store_true')
-    parser.add_argument('--start-epoch', type=int)
-    parser.add_argument('--epochs', type=int)
-    parser.add_argument('--workers', type=int)
-    parser.add_argument('--logcomet', action='store_true')
+    parser.add_argument('--data-dir', dest='data_dir', type=str, default='')
+
     args = parser.parse_args()
     return args
 
@@ -97,6 +111,13 @@ if __name__ == "__main__":
         cfg.WORKERS = args.workers
     if args.logdir:
         cfg.LOGDIR = args.logdir
+    if args.dataset is not None:
+        cfg.DATASET.DATASET = args.DATASET
+
+    if args.comet_project_name is not None:
+        cfg.COMET_PROJECT_NAME = args.comet_project_name
+    elif cfg.COMET_PROJECT_NAME is None:
+        cfg.COMET_PROJECT_NAME = os.getenv('COMET_PROJECT_NAME')
 
     cfg.exp_name = cfg.LOGDIR
 

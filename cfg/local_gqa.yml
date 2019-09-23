@@ -1,7 +1,7 @@
 GPU_ID: '-1'
 WORKERS: 1
 CUDA: False
-COMET_PROJECT_NAME: 'local'
+COMET_PROJECT_NAME: 'local-gqa'
 
 TRAIN:
     FLAG: True
@@ -17,7 +17,8 @@ TRAIN:
     # MAX_STEPS: 4
 
 DATASET:
-    DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/CLEVR_v1.0/data'
+    DATASET: 'gqa'
+    DATA_DIR: '/Users/sebamenabar/Documents/datasets/GQA/data'
 
 model:
     max_step: 4
@@ -25,14 +26,15 @@ model:
     common:
         module_dim: 256
     input_unit:
+        in_channels: 2048
         wordvec_dim: 256
         rnn_dim: 256
         bidirectional: True
         separate_syntax_semantics_embeddings: False
     # control_unit:
     read_unit:
-        gate: True
-        num_lobs: 1
+        gate: False
+        num_lobs: 0
     write_unit:
         rtom: False
     # output_unit: 

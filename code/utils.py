@@ -82,7 +82,7 @@ def load_vocab(cfg):
     vocab = {}
     vocab['question_token_to_idx'] = dictionaries["word_dic"]
     vocab['answer_token_to_idx'] = dictionaries["answer_dic"]
-    vocab['question_token_to_idx']['pad'] = 0
+    vocab['question_token_to_idx']['<PAD>'] = 0
     vocab['question_idx_to_token'] = invert_dict(vocab['question_token_to_idx'])
     vocab['answer_idx_to_token'] = invert_dict(vocab['answer_token_to_idx'])
 

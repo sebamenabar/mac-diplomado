@@ -15,6 +15,7 @@ __C.GPU_ID = '0'
 __C.CUDA = True
 __C.WORKERS = 4
 __C.LOGDIR = None
+__C.COMET_PROJECT_NAME = None
 
 __C.EVAL = False
 __C.TEST = False
@@ -42,6 +43,7 @@ __C.TRAIN.RADAM = False
 
 # Dataset options
 __C.DATASET = edict()
+__C.DATASET.DATASET = 'clevr'
 __C.DATASET.DATA_DIR = ''
 __C.DATASET.COGENT = ''
 # __C.DATASET = dict(__C.DATASET)
@@ -51,6 +53,7 @@ __C.model = edict(
     separate_syntax_semantics=False,
     common=edict(module_dim=512),
     input_unit=edict(
+        in_channels=1024,
         wordvec_dim=300,
         rnn_dim=512,
         bidirectional=True,

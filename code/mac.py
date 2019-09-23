@@ -15,16 +15,17 @@ acts = {
 
 
 def load_MAC(cfg, vocab):
-    kwargs = {'vocab': vocab,
-              # 'max_step': cfg.TRAIN.MAX_STEPS
-              }
+    kwargs = {
+        'vocab': vocab,
+        'num_answers': len(vocab['answer_token_to_idx']),
+        }
 
     model = MACNetwork(cfg, **kwargs)
     model_ema = MACNetwork(cfg, **kwargs)
     for param in model_ema.parameters():
         param.requires_grad = False
 
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and cfg.CUDA:
         model.cuda()
         model_ema.cuda()
     else:
@@ -361,6 +362,7 @@ class InputUnit(nn.Module):
                  separate_syntax_semantics=False,
                  separate_syntax_semantics_embeddings=False,
                  stem_act='ELU',
+                 in_channels=1024,
                 ):
         super(InputUnit, self).__init__()
 
@@ -371,7 +373,7 @@ class InputUnit(nn.Module):
 
         stem_act = acts[stem_act]
         self.stem = nn.Sequential(nn.Dropout(p=0.18),
-                                  nn.Conv2d(1024, module_dim, 3, 1, 1),
+                                  nn.Conv2d(in_channels, module_dim, 3, 1, 1),
                                   stem_act(),
                                   nn.Dropout(p=0.18),
                                   nn.Conv2d(module_dim, module_dim, kernel_size=3, stride=1, padding=1),
