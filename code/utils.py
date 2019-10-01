@@ -113,6 +113,7 @@ def cfg_to_exp_name(cfg):
     sss = 'sss' if cfg.model.separate_syntax_semantics else ''
     if len(sss) and cfg.model.input_unit.separate_syntax_semantics_embeddings:
         sss += 'e'
+    use_feats = 'objs' if cfg.model.use_feats == 'objects' else ''
     # Control config
     control_feed_prev = cfg.model.control_unit.control_feed_prev
     # Read config
@@ -142,8 +143,11 @@ def cfg_to_exp_name(cfg):
     if read_gate:
         exp_name += f'_lobs{num_lobs}'
     exp_name += f'_{write}'
+    if use_feats:
+        exp_name += f'_{use_feats}'
 
-    exp_name += f'_{module_dim}_bsz{bsz}_lr{lr}'
+    exp_name += f'_{module_dim}'
+    # exp_name += f'_{module_dim}_bsz{bsz}_lr{lr}'
 
     return exp_name
             

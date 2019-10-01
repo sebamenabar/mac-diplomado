@@ -51,7 +51,11 @@ __C.model = edict(
     init_mem='random',
     max_step=4,
     separate_syntax_semantics=False,
-    common=edict(module_dim=512),
+    use_feats='spatial',
+    common=edict(
+        module_dim=512,
+        # use_feats='spatial',
+        ),
     input_unit=edict(
         in_channels=1024,
         wordvec_dim=300,

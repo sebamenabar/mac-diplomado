@@ -111,8 +111,9 @@ def qonly_collate_fn(batch):
 
 
 class GQADataset(data.Dataset):
-    def __init__(self, data_dir, split='train', sample=False):
+    def __init__(self, data_dir, split='train', sample=False, use_feats='spatial'):
 
+        self.use_feats = use_feats
         self.sample = sample
         if sample:
             sample = '_sample'
@@ -120,20 +121,37 @@ class GQADataset(data.Dataset):
             sample = ''
         with open(os.path.join(data_dir, '{}{}.pkl'.format(split, sample)), 'rb') as f:
             self.data = pickle.load(f)
-        with open(os.path.join(data_dir, 'gqa_spatial_merged_info.json')) as f:
-            self.spatial_info = json.load(f)
-        self.img = h5py.File(os.path.join(data_dir, 'gqa_spatial.h5'), 'r')['features']
+        with open(os.path.join(data_dir, f'gqa_{self.use_feats}_merged_info.json')) as f:
+            self.info = json.load(f)
+        self.features = h5py.File(os.path.join(data_dir, f'gqa_{self.use_feats}.h5'), 'r')
+        
+        if self.use_feats == 'spatial':
+            self.features = self.data['features']
+        elif self.use_feats == 'objects':
+            self.features, self.bboxes = self.features['features'], self.features['bboxes']
 
     def __getitem__(self, index):
-        question = self.data[index]
         imgid, question, answer, group, questionid = self.data[index]
-        imgidx = self.spatial_info[imgid]['index']
-        img = torch.from_numpy(self.img[imgidx])
+        img_info = self.info[imgid]
+        imgidx = img_info['index']
+        
+        if self.use_feats == 'spatial':
+            img = torch.from_numpy(self.img[imgidx])
+        elif self.use_feats == 'objects':
+            h, w = img_info['height'], img_info['width']
+            bboxes = self.bboxes[imgidx] / (w, h, w, h)
+            img = self.features[imgidx]
+            
+            bboxes = bboxes[:img_info['objectsNum']]
+            img = img[:img_info['objectsNum']]
+                        
+            img = torch.from_numpy(np.concatenate((img, bboxes), axis=1)).to(torch.float32)
 
         return img, question, len(question), answer, group, questionid, imgid
 
     def __len__(self):
         return len(self.data)
+
 
 def collate_fn_gqa(batch):
     images, lengths, answers, _ = [], [], [], []
@@ -154,3 +172,31 @@ def collate_fn_gqa(batch):
 
     return {'image': torch.stack(images), 'question': torch.from_numpy(questions),
             'answer': torch.LongTensor(answers), 'question_length': lengths}
+
+def collate_fn_gqa_objs(batch):
+    images, obj_lengths, lengths, answers = [], [], [], []
+    batch_size = len(batch)
+
+    max_len = max(map(lambda x: len(x[1]), batch))
+
+    questions = np.zeros((batch_size, max_len), dtype=np.int64)
+    sort_by_len = sorted(batch, key=lambda x: len(x[1]), reverse=True)
+
+    for i, b in enumerate(sort_by_len):
+        image, question, length, answer, group, qid, imgid = b
+        images.append(image)
+        obj_lengths.append(image.size(0))
+        length = len(question)
+        questions[i, :length] = question
+        lengths.append(length)
+        answers.append(answer)
+
+    return {
+        'image': (
+            torch.nn.utils.rnn.pad_sequence(images, batch_first=True),
+            torch.as_tensor(obj_lengths),
+        ),
+        'question': torch.from_numpy(questions),
+        'answer': torch.LongTensor(answers),
+        'question_length': lengths,
+        }
