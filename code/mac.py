@@ -133,12 +133,15 @@ class ControlUnit(nn.Module):
 
 
 class ReadUnit(nn.Module):
-    def __init__(self, module_dim, gate=False, num_lobs=0, use_feats='spatial'):
+    def __init__(self, module_dim, gate=False, num_lobs=0, num_gt_lobs=0, use_feats='spatial'):
         super().__init__()
+
+        assert not ((num_lobs > 0) and (num_gt_lobs > 0))
 
         self.gate = gate
         self.use_feats = use_feats
         self.module_dim = module_dim
+        self.num_gt_lobs = num_gt_lobs
 
         self.concat = nn.Linear(module_dim * 2, module_dim)
         # self.concat_2 = nn.Linear(module_dim, module_dim)
@@ -208,21 +211,13 @@ class ReadUnit(nn.Module):
 
         ## Step 3: sum attentions up over the knowledge base
         # transform vectors to attention distribution
-        # print('OBJECTS LENGTH')
-        # print(objs_length)
         interactions = self.dropout(interactions)
         attn = self.attn(interactions).squeeze(-1)
-        # print('ATTN LOGITS PRE MASK', attn.size())
-        # print(attn)
         if objs_length is not None:
             attn = attn.unsqueeze(2)
-            attn = mask_by_length(attn, objs_length, device=know.device)
+            attn = mask_by_length(attn, objs_length + self.num_gt_lobs, device=know.device)
             attn = attn.squeeze(2)
-        # print('ATTN LOGITS POST MASK')
-        # print(attn)
         attn = F.softmax(attn, 1)
-        # print('ATTN SOFTMAX')
-        # print(attn)
         attn = self.kb_attn_idty(attn)
 
         # sum up the knowledge base according to the distribution
@@ -392,6 +387,7 @@ class InputUnit(nn.Module):
                  stem_act='ELU',
                  in_channels=1024,
                  use_feats='spatial',
+                 num_gt_lobs=0,
                 ):
         super(InputUnit, self).__init__()
 
@@ -424,6 +420,9 @@ class InputUnit(nn.Module):
         self.embedding_dropout = nn.Dropout(p=0.15)
         self.question_dropout = nn.Dropout(p=0.08)
 
+        self.num_gt_lobs = num_gt_lobs
+        self.gt_lobs = nn.Parameter(torch.randn(num_gt_lobs, module_dim))
+
     def forward(self, image, question, question_len):
         b_size = question.size(0)
 
@@ -440,6 +439,12 @@ class InputUnit(nn.Module):
         if self.use_feats == 'spatial':
             img = img
         elif self.use_feats == 'objects':
+            if self.num_gt_lobs > 0:
+                img_with_lobs = []
+                for t, length in zip(img, image[1]):
+                    img_with_lobs.append(torch.cat((t[:length], self.gt_lobs, t[length:])))
+                img = torch.stack(img_with_lobs)
+
             img = (img, image[1])
 
         # get question and contextual word embeddings
@@ -497,11 +502,13 @@ class MACNetwork(nn.Module):
             cfg.model.control_unit.separate_syntax_semantics = True
         cfg.model.input_unit.use_feats = cfg.model.use_feats
         cfg.model.read_unit.use_feats = cfg.model.use_feats
-        
+        cfg.model.read_unit.num_gt_lobs = cfg.model.num_gt_lobs
+
         encoder_vocab_size = len(vocab['question_token_to_idx'])
         
         self.input_unit = InputUnit(
             vocab_size=encoder_vocab_size,
+            num_gt_lobs=cfg.model.num_gt_lobs,
             **cfg.model.common,
             **cfg.model.input_unit,
         )
@@ -514,6 +521,7 @@ class MACNetwork(nn.Module):
 
         self.mac = MACUnit(
             cfg.model,
+            # num_gt_lobs=cfg.model.num_gt_lobs,
             max_step=cfg.model.max_step,
             **cfg.model.common,
         )

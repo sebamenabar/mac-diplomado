@@ -52,6 +52,7 @@ __C.model = edict(
     max_step=4,
     separate_syntax_semantics=False,
     use_feats='spatial',
+    num_gt_lobs=0,
     common=edict(
         module_dim=512,
         # use_feats='spatial',
