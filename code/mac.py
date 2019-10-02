@@ -433,11 +433,11 @@ class InputUnit(nn.Module):
             img = image[0]
 
         img = self.stem(img)
-        img = img.view(b_size, self.dim, -1)
-        img = img.permute(0,2,1)
 
         if self.use_feats == 'spatial':
             img = img
+            img = img.view(b_size, self.dim, -1)
+            img = img.permute(0,2,1)
         elif self.use_feats == 'objects':
             if self.num_gt_lobs > 0:
                 img_with_lobs = []

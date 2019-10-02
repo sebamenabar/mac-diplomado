@@ -145,7 +145,9 @@ class GQADataset(data.Dataset):
             bboxes = bboxes[:img_info['objectsNum']]
             img = img[:img_info['objectsNum']]
                         
-            img = torch.from_numpy(np.concatenate((img, bboxes), axis=1)).to(torch.float32)
+            # img = torch.from_numpy(np.concatenate((img, bboxes), axis=1)).to(torch.float32)
+            img = torch.from_numpy(np.concatenate((img, bboxes), axis=1).astype(np.float32))
+            img = (img, img_info['objectsNum'])
 
         return img, question, len(question), answer, group, questionid, imgid
 
@@ -183,17 +185,21 @@ def collate_fn_gqa_objs(batch):
     sort_by_len = sorted(batch, key=lambda x: len(x[1]), reverse=True)
 
     for i, b in enumerate(sort_by_len):
-        image, question, length, answer, group, qid, imgid = b
+        (image, obj_length), question, length, answer, group, qid, imgid = b
         images.append(image)
-        obj_lengths.append(image.size(0))
+        obj_lengths.append(obj_length)
         length = len(question)
         questions[i, :length] = question
         lengths.append(length)
         answers.append(answer)
 
+    # images = torch.stack(images)
+    images = torch.nn.utils.rnn.pad_sequence(images, batch_first=True)
+
     return {
         'image': (
-            torch.nn.utils.rnn.pad_sequence(images, batch_first=True),
+            # torch.nn.utils.rnn.pad_sequence(images, batch_first=True),
+            images,
             torch.as_tensor(obj_lengths),
         ),
         'question': torch.from_numpy(questions),
