@@ -3,7 +3,9 @@ import os
 import glob
 import errno
 import pickle
+import functools
 from copy import deepcopy
+from collections import OrderedDict
 from itertools import chain, starmap
 
 import numpy as np
@@ -111,6 +113,7 @@ def cfg_to_exp_name(cfg):
     sss = 'sss' if cfg.model.separate_syntax_semantics else ''
     if len(sss) and cfg.model.input_unit.separate_syntax_semantics_embeddings:
         sss += 'e'
+    use_feats = 'objs' if cfg.model.use_feats == 'objects' else ''
     # Control config
     control_feed_prev = cfg.model.control_unit.control_feed_prev
     # Read config
@@ -140,8 +143,11 @@ def cfg_to_exp_name(cfg):
     if read_gate:
         exp_name += f'_lobs{num_lobs}'
     exp_name += f'_{write}'
+    if use_feats:
+        exp_name += f'_{use_feats}'
 
-    exp_name += f'_{module_dim}_bsz{bsz}_lr{lr}'
+    exp_name += f'_{module_dim}'
+    # exp_name += f'_{module_dim}_bsz{bsz}_lr{lr}'
 
     return exp_name
             
@@ -176,3 +182,49 @@ def flatten_json_iterative_solution(dictionary):
             break
 
     return dictionary
+
+def rsetattr(obj, attr, val):
+    pre, _, post = attr.rpartition('.')
+    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
+
+# using wonder's beautiful simplification: https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-objects/31174427?noredirect=1#comment86638618_31174427
+
+def rgetattr(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+class IntermediateLayerGetter(nn.Module):
+    def __init__(self, model, return_layers, keep_output=True):
+        super().__init__()
+        self._model = model
+        self.return_layers = return_layers
+        self.keep_output = keep_output
+        
+    def forward(self, *args, **kwargs):
+        ret = OrderedDict()
+        handles = []
+        for name, new_name in self.return_layers.items():
+            layer = rgetattr(self._model, name)
+            
+            def hook(module, input, output, new_name=new_name):
+                if new_name in ret:
+                    if type(ret[new_name]) is list:
+                        ret[new_name].append(output)
+                    else:
+                        ret[new_name] = [ret[new_name], output]
+                else:
+                    ret[new_name] = output
+            h = layer.register_forward_hook(hook)
+            handles.append(h)
+            
+        if self.keep_output:
+            output = self._model(*args, **kwargs)
+        else:
+            self._model(*args, **kwargs)
+            output = None
+            
+        for h in handles:
+            h.remove()
+        
+        return ret, output

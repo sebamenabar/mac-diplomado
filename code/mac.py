@@ -34,6 +34,15 @@ def load_MAC(cfg, vocab):
     model.train()
     return model, model_ema
 
+def mask_by_length(x, lengths, device=None):
+    lengths = torch.as_tensor(lengths, dtype=torch.float32, device=device)
+    max_len = max(lengths)
+    mask = torch.arange(max_len, device=device).expand(len(lengths), int(max_len)) < lengths.unsqueeze(1)
+    mask = mask.float().unsqueeze(2)
+    x_masked = x * mask + (1 - 1 / mask)
+
+    return x_masked
+
 class ControlUnit(nn.Module):
     def __init__(self,
                  module_dim,
@@ -70,15 +79,15 @@ class ControlUnit(nn.Module):
         mask = (ones - mask) * (1e-30)
         return mask
 
-    @staticmethod
-    def mask_by_length(x, lengths, device=None):
-        lengths = torch.as_tensor(lengths, dtype=torch.float32, device=device)
-        max_len = max(lengths)
-        mask = torch.arange(max_len, device=device).expand(len(lengths), int(max_len)) < lengths.unsqueeze(1)
-        mask = mask.float().unsqueeze(2)
-        x_masked = x * mask + (1 - 1 / mask)
+    # @staticmethod
+    # def mask_by_length(x, lengths, device=None):
+    #     lengths = torch.as_tensor(lengths, dtype=torch.float32, device=device)
+    #     max_len = max(lengths)
+    #     mask = torch.arange(max_len, device=device).expand(len(lengths), int(max_len)) < lengths.unsqueeze(1)
+    #     mask = mask.float().unsqueeze(2)
+    #     x_masked = x * mask + (1 - 1 / mask)
 
-        return x_masked
+    #     return x_masked
 
     def forward(self, question, context, question_lengths, step, prev_control=None):
         """
@@ -113,7 +122,7 @@ class ControlUnit(nn.Module):
         # compute attention distribution over words and summarize them accordingly
         logits = self.attn(interactions)
 
-        logits = self.mask_by_length(logits, question_lengths, device=syntactics.device)
+        logits = mask_by_length(logits, question_lengths, device=syntactics.device)
         attn = F.softmax(logits, 1)
         attn = self.cw_attn_idty(attn)
 
@@ -124,11 +133,15 @@ class ControlUnit(nn.Module):
 
 
 class ReadUnit(nn.Module):
-    def __init__(self, module_dim, gate=False, num_lobs=0):
+    def __init__(self, module_dim, gate=False, num_lobs=0, num_gt_lobs=0, use_feats='spatial'):
         super().__init__()
 
+        assert not ((num_lobs > 0) and (num_gt_lobs > 0))
+
         self.gate = gate
+        self.use_feats = use_feats
         self.module_dim = module_dim
+        self.num_gt_lobs = num_gt_lobs
 
         self.concat = nn.Linear(module_dim * 2, module_dim)
         # self.concat_2 = nn.Linear(module_dim, module_dim)
@@ -168,6 +181,12 @@ class ReadUnit(nn.Module):
         bsz = memory.size(0)
         ## Step 1: knowledge base / memory interactions
         # compute interactions between knowledge base and memory
+        if self.use_feats == 'objects':
+            know, objs_length = know
+        else:
+            know = know
+            objs_length = None
+
         know = self.dropout(know)
         if memDpMask is not None:
             if self.training:
@@ -194,6 +213,10 @@ class ReadUnit(nn.Module):
         # transform vectors to attention distribution
         interactions = self.dropout(interactions)
         attn = self.attn(interactions).squeeze(-1)
+        if objs_length is not None:
+            attn = attn.unsqueeze(2)
+            attn = mask_by_length(attn, objs_length + self.num_gt_lobs, device=know.device)
+            attn = attn.squeeze(2)
         attn = F.softmax(attn, 1)
         attn = self.kb_attn_idty(attn)
 
@@ -363,21 +386,27 @@ class InputUnit(nn.Module):
                  separate_syntax_semantics_embeddings=False,
                  stem_act='ELU',
                  in_channels=1024,
+                 use_feats='spatial',
+                 num_gt_lobs=0,
                 ):
         super(InputUnit, self).__init__()
 
         self.dim = module_dim
+        self.use_feats = use_feats
         self.wordvec_dim = wordvec_dim
         self.separate_syntax_semantics = separate_syntax_semantics
         self.separate_syntax_semantics_embeddings = separate_syntax_semantics and separate_syntax_semantics_embeddings
 
         stem_act = acts[stem_act]
-        self.stem = nn.Sequential(nn.Dropout(p=0.18),
-                                  nn.Conv2d(in_channels, module_dim, 3, 1, 1),
-                                  stem_act(),
-                                  nn.Dropout(p=0.18),
-                                  nn.Conv2d(module_dim, module_dim, kernel_size=3, stride=1, padding=1),
-                                  stem_act())
+        if self.use_feats == 'spatial':
+            self.stem = nn.Sequential(nn.Dropout(p=0.18),
+                                    nn.Conv2d(in_channels, module_dim, 3, 1, 1),
+                                    stem_act(),
+                                    nn.Dropout(p=0.18),
+                                    nn.Conv2d(module_dim, module_dim, kernel_size=3, stride=1, padding=1),
+                                    stem_act())
+        elif self.use_feats == 'objects':
+            self.stem = nn.Linear(in_channels + 4, module_dim)
 
         self.bidirectional = bidirectional
         if bidirectional:
@@ -391,13 +420,32 @@ class InputUnit(nn.Module):
         self.embedding_dropout = nn.Dropout(p=0.15)
         self.question_dropout = nn.Dropout(p=0.08)
 
+        self.num_gt_lobs = num_gt_lobs
+        self.gt_lobs = nn.Parameter(torch.randn(num_gt_lobs, module_dim))
+
     def forward(self, image, question, question_len):
         b_size = question.size(0)
 
         # get image features
-        img = self.stem(image)
+        if self.use_feats == 'spatial':
+            img = image
+        elif self.use_feats == 'objects':
+            img = image[0]
+
+        img = self.stem(img)
         img = img.view(b_size, self.dim, -1)
         img = img.permute(0,2,1)
+
+        if self.use_feats == 'spatial':
+            img = img
+        elif self.use_feats == 'objects':
+            if self.num_gt_lobs > 0:
+                img_with_lobs = []
+                for t, length in zip(img, image[1]):
+                    img_with_lobs.append(torch.cat((t[:length], self.gt_lobs, t[length:])))
+                img = torch.stack(img_with_lobs)
+
+            img = (img, image[1])
 
         # get question and contextual word embeddings
         embed = self.encoder_embed(question)
@@ -452,12 +500,15 @@ class MACNetwork(nn.Module):
         if getattr(cfg.model, 'separate_syntax_semantics') is True:
             cfg.model.input_unit.separate_syntax_semantics = True
             cfg.model.control_unit.separate_syntax_semantics = True
-            
-        
+        cfg.model.input_unit.use_feats = cfg.model.use_feats
+        cfg.model.read_unit.use_feats = cfg.model.use_feats
+        cfg.model.read_unit.num_gt_lobs = cfg.model.num_gt_lobs
+
         encoder_vocab_size = len(vocab['question_token_to_idx'])
         
         self.input_unit = InputUnit(
             vocab_size=encoder_vocab_size,
+            num_gt_lobs=cfg.model.num_gt_lobs,
             **cfg.model.common,
             **cfg.model.input_unit,
         )
@@ -470,6 +521,7 @@ class MACNetwork(nn.Module):
 
         self.mac = MACUnit(
             cfg.model,
+            # num_gt_lobs=cfg.model.num_gt_lobs,
             max_step=cfg.model.max_step,
             **cfg.model.common,
         )
