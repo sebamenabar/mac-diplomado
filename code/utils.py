@@ -118,7 +118,7 @@ def cfg_to_exp_name(cfg):
     control_feed_prev = cfg.model.control_unit.control_feed_prev
     # Read config
     read_gate = cfg.model.read_unit.gate
-    num_lobs = cfg.model.read_unit.num_lobs
+    num_lobs = cfg.model.read_unit.num_lobs or cfg.model.num_gt_lobs
     # Write config
     if cfg.model.write_unit.rtom:
         write = 'rtom'
@@ -140,7 +140,7 @@ def cfg_to_exp_name(cfg):
         exp_name += f'_{sss}'
     if control_feed_prev:
         exp_name += f'_cfp'
-    if read_gate:
+    if read_gate or use_feats == 'objs':
         exp_name += f'_lobs{num_lobs}'
     exp_name += f'_{write}'
     if use_feats:
