@@ -19,7 +19,7 @@ __C.COMET_PROJECT_NAME = None
 
 __C.EVAL = False
 __C.TEST = False
-__C.TEST_BATCH_SIZE = 256
+__C.TEST_BATCH_SIZE = 128
 __C.SAMPLE = False
 __C.resume_model = None
 __C.resume_model_ema = None
