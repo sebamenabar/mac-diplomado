@@ -126,7 +126,7 @@ class GQADataset(data.Dataset):
         self.features = h5py.File(os.path.join(data_dir, f'gqa_{self.use_feats}.h5'), 'r')
         
         if self.use_feats == 'spatial':
-            self.features = self.data['features']
+            self.features = self.features['features']
         elif self.use_feats == 'objects':
             self.features, self.bboxes = self.features['features'], self.features['bboxes']
 
@@ -136,7 +136,7 @@ class GQADataset(data.Dataset):
         imgidx = img_info['index']
         
         if self.use_feats == 'spatial':
-            img = torch.from_numpy(self.img[imgidx])
+            img = torch.from_numpy(self.features[imgidx])
         elif self.use_feats == 'objects':
             h, w = img_info['height'], img_info['width']
             bboxes = self.bboxes[imgidx] / (w, h, w, h)

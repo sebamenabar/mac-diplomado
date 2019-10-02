@@ -252,7 +252,7 @@ class Trainer():
                 if self.use_feats == 'spatial':
                     image = image.cuda()
                 elif self.use_feats == 'objects':
-                    image = (e.cuda() for e in image)
+                    image = [e.cuda() for e in image]
                 question = question.cuda()
                 answer = answer.cuda().squeeze()
             else:
@@ -389,7 +389,7 @@ class Trainer():
                 if self.use_feats == 'spatial':
                     image = image.cuda()
                 elif self.use_feats == 'objects':
-                    image = (e.cuda() for e in image)
+                    image = [e.cuda() for e in image]
                 question = question.cuda()
                 answer = answer.cuda().squeeze()
 
