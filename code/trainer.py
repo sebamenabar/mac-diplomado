@@ -79,7 +79,7 @@ class Trainer():
         if cfg.DATASET.DATASET == 'clevr':
             clevr_collate_fn = collate_fn
             cogent = cfg.DATASET.COGENT
-            if cogent and cfg.DATASET.DATASET == 'clevr':
+            if cogent:
                 print(f'Using CoGenT {cogent.upper()}')
 
             if cfg.TRAIN.FLAG:
