@@ -24,7 +24,7 @@ model:
     max_step: 4
     separate_syntax_semantics: False
     use_feats: 'objects'
-    num_gt_lobs: 2
+    num_gt_lobs: 0
     common:
         module_dim: 256
     input_unit:

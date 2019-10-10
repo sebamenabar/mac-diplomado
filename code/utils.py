@@ -215,7 +215,10 @@ class IntermediateLayerGetter(nn.Module):
                         ret[new_name] = [ret[new_name], output]
                 else:
                     ret[new_name] = output
-            h = layer.register_forward_hook(hook)
+            try:
+                h = layer.register_forward_hook(hook)
+            except AttributeError as e:
+                raise AttributeError(f'Module {name} not found in model')
             handles.append(h)
             
         if self.keep_output:

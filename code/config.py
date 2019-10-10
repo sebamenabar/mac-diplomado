@@ -93,7 +93,9 @@ def _merge_a_into_b(a, b):
     for k, v in a.items():
         # a must specify keys that are in b
         if not k in b:
-            raise KeyError('{} is not a valid config key'.format(k))
+            # raise KeyError('{} is not a valid config key'.format(k))
+            print('{} is not a valid config key'.format(k))
+            continue
 
         # the types must match, too
         old_type = type(b[k])
