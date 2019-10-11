@@ -76,6 +76,7 @@ class Trainer():
         self.dataset = []
         self.dataloader = []
         self.use_feats = cfg.model.use_feats
+        eval_split = cfg.EVAL if cfg.EVAL else 'val'
         if cfg.DATASET.DATASET == 'clevr':
             clevr_collate_fn = collate_fn
             cogent = cfg.DATASET.COGENT
@@ -86,14 +87,10 @@ class Trainer():
                 self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample)
                 self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                                             num_workers=cfg.WORKERS, drop_last=True, collate_fn=clevr_collate_fn)
-            if cfg.TRAIN.FLAG or cfg.EVAL:
-                self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="val" + cogent, sample=sample)
-                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
-                                                shuffle=False, num_workers=cfg.WORKERS, collate_fn=clevr_collate_fn)
-            elif cfg.TEST:
-                self.dataset_val = ClevrDataset(data_dir=self.data_dir, split="test" + cogent, sample=sample)
-                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
-                                                shuffle=False, num_workers=cfg.WORKERS, collate_fn=clevr_collate_fn)
+            
+            self.dataset_val = ClevrDataset(data_dir=self.data_dir, split=eval_split + cogent, sample=sample)
+            self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
+                                            shuffle=False, num_workers=cfg.WORKERS, collate_fn=clevr_collate_fn)
 
         elif cfg.DATASET.DATASET == 'gqa':
             if self.use_feats == 'spatial':
@@ -104,31 +101,10 @@ class Trainer():
                 self.dataset = GQADataset(data_dir=self.data_dir, split="train", sample=sample, use_feats=self.use_feats)
                 self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                                             num_workers=cfg.WORKERS, drop_last=True, collate_fn=gqa_collate_fn)
-            if cfg.TRAIN.FLAG or cfg.EVAL:
-                self.dataset_val = GQADataset(data_dir=self.data_dir, split="val", sample=sample, use_feats=self.use_feats)
-                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, shuffle=False,
-                                            num_workers=cfg.WORKERS, drop_last=False, collate_fn=gqa_collate_fn)
-            elif cfg.TEST:
-                self.dataset_val = GQADataset(data_dir=self.data_dir, split="testdev", sample=sample, use_feats=self.use_feats)
-                self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
-                                                shuffle=False, num_workers=cfg.WORKERS, collate_fn=gqa_collate_fn)
-
-        # load dataset
-        # if cfg.TRAIN.FLAG:
-        #     if cfg.DATASET.DATASET == 'clevr':
-        #     elif cfg.DATASET.DATASET == 'gqa':
-
-        # else:
-        #     self.dataset = []
-        #     self.dataloader = []
-
-        # if cfg.TRAIN.FLAG or cfg.EVAL:
-        #     if cfg.DATASET.DATASET == 'clevr':
-        #     elif cfg.DATASET.DATASET == 'gqa':
-
-        # elif cfg.TEST:
-        #     if cfg.DATASET.DATASET == 'clevr':
-        #     elif cfg.DATASET.DATASET == 'gqa':
+            
+            self.dataset_val = GQADataset(data_dir=self.data_dir, split=eval_split, sample=sample, use_feats=self.use_feats)
+            self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, shuffle=False,
+                                        num_workers=cfg.WORKERS, drop_last=False, collate_fn=gqa_collate_fn)
 
         # load model
         self.vocab = load_vocab(cfg)
@@ -170,15 +146,16 @@ class Trainer():
             workspace=os.getenv('COMET_WORKSPACE'),
             disabled=cfg.logcomet is False,
         )
-        exp_name = cfg_to_exp_name(cfg)
-        print(exp_name)
-        self.comet_exp.set_name(exp_name)
-        self.comet_exp.log_parameters(flatten_json_iterative_solution(cfg))
-        self.comet_exp.log_asset(self.logfile)
-        self.comet_exp.log_asset_data(json.dumps(cfg), file_name='cfg.json')
-        self.comet_exp.set_model_graph(str(self.model))
-        if cfg.cfg_file:
-            self.comet_exp.log_asset(cfg.cfg_file)
+        if cfg.logcomet:
+            exp_name = cfg_to_exp_name(cfg)
+            print(exp_name)
+            self.comet_exp.set_name(exp_name)
+            self.comet_exp.log_parameters(flatten_json_iterative_solution(cfg))
+            self.comet_exp.log_asset(self.logfile)
+            self.comet_exp.log_asset_data(json.dumps(cfg), file_name='cfg.json')
+            self.comet_exp.set_model_graph(str(self.model))
+            if cfg.cfg_file:
+                self.comet_exp.log_asset(cfg.cfg_file)
 
         with open(os.path.join(self.path, 'cfg.json'), 'w') as f:
             json.dump(cfg, f)
@@ -369,7 +346,9 @@ class Trainer():
 
         if mode == "train":
             loader = self.dataloader
-        elif (mode == "validation") or (mode == 'test'):
+        # elif (mode == "validation") or (mode == 'test'):
+        #     loader = self.dataloader_val
+        else:
             loader = self.dataloader_val
 
         total_correct = 0

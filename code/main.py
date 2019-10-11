@@ -53,8 +53,8 @@ def parse_args():
     # Data
     parser.add_argument('--cogent', type=str)
     parser.add_argument('--dataset', type=str)
-    parser.add_argument('--eval', action='store_true')
-    parser.add_argument('--test', action='store_true')
+    parser.add_argument('--eval', default='')
+    # parser.add_argument('--test', action='store_true')
     parser.add_argument('--sample', action='store_true')
     parser.add_argument('--data-dir', dest='data_dir', type=str, default='')
 
@@ -62,12 +62,14 @@ def parse_args():
     return args
 
 
-def set_logdir(max_steps, logdir=None):
+def set_logdir(max_steps, logdir='', eval=''):
     now = datetime.datetime.now(dateutil.tz.tzlocal())
-    if logdir is None:
-        logdir = "data/{}_max_steps_{}".format(now, max_steps)
-    else:
+    if logdir:
         logdir = f'data/{logdir}'
+    else:
+        logdir = "data/{}_max_steps_{}".format(now, max_steps)
+    if eval:
+        logdir += f'_eval-{eval}'
     mkdir_p(logdir)
     print("Saving output to: {}".format(logdir))
     code_dir = os.path.join(os.getcwd(), "code")
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     if args.logdir:
         cfg.LOGDIR = args.logdir
     if args.dataset is not None:
-        cfg.DATASET.DATASET = args.DATASET
+        cfg.DATASET.DATASET = args.dataset
 
     if args.comet_project_name is not None:
         cfg.COMET_PROJECT_NAME = args.comet_project_name
@@ -128,20 +130,18 @@ if __name__ == "__main__":
     if cfg.CUDA:
         torch.cuda.manual_seed_all(args.manualSeed)
 
-    if args.eval or args.test:
+    if args.eval:
         cfg.TRAIN.FLAG = False
-    if args.test:
-        cfg.TEST = True
-        args.EVAL = False
+        cfg.logcomet = False
     cfg.EVAL = args.eval
 
-    logdir = set_logdir(cfg.model.max_step, cfg.LOGDIR)
+    logdir = set_logdir(cfg.model.max_step, cfg.LOGDIR, eval=cfg.EVAL)
     trainer = Trainer(logdir, cfg)
 
     if cfg.TRAIN.FLAG:
         trainer.train()
-    elif cfg.EVAL or cfg.TEST:
-        mode = 'validation' if cfg.EVAL else 'test'
+    elif cfg.EVAL:
+        mode = cfg.EVAL
         trainer.comet_exp.disable_mp()
         metrics = trainer.calc_accuracy(mode)
 
@@ -150,9 +150,3 @@ if __name__ == "__main__":
 
         print('Loss: {:.4f}'.format(metrics['loss']))
         print('Loss EMA: {:.4f}'.format(metrics['loss_ema']))
-
-    # elif cfg.TEST:
-    #     accuracy, accuracy_ema = trainer.calc_accuracy('test')
-
-        # raise NotImplementedError
-

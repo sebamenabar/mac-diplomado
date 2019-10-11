@@ -1,7 +1,11 @@
 from __future__ import division
 from __future__ import print_function
 
+import os
 import os.path as osp
+
+import yaml
+import json
 
 import numpy as np
 
@@ -128,8 +132,11 @@ def _merge_a_into_b(a, b):
 
 def cfg_from_file(filename):
     """Load a config file and merge it into the default options."""
-    import yaml
     with open(filename, 'r') as f:
-        yaml_cfg = edict(yaml.safe_load(f))
+        _, ext = os.path.splitext(filename)
+        if ext == '.yml' or ext == '.yaml':
+            file_cfg = edict(yaml.safe_load(f))
+        elif ext == '.json':
+            file_cfg = edict(json.load(f))
 
-    _merge_a_into_b(yaml_cfg, __C)
+    _merge_a_into_b(file_cfg, __C)

@@ -421,6 +421,7 @@ class InputUnit(nn.Module):
         self.question_dropout = nn.Dropout(p=0.08)
 
         self.num_gt_lobs = num_gt_lobs
+        # self.gt_lobs = nn.Parameter(torch.randn(num_gt_lobs, module_dim))
         if num_gt_lobs > 0:
             self.gt_lobs = nn.Parameter(torch.randn(num_gt_lobs, module_dim))
         else:
