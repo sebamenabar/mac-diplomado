@@ -213,11 +213,12 @@ def setlabel(ax, label, loc=2, borderpad=0.6, **kwargs):
         prop={
             'size': 18,
             'weight': 'bold',
+
         },
         **kwargs,
     )
     for text in label_legend.get_texts():
-        plt.setp(text, color='w')
+        plt.setp(text, color=(1, 0, 1))
     label_legend.remove()
     ax.add_artist(label_legend)
     line.remove()
@@ -317,7 +318,14 @@ def plot_word_img_attn_objs(
     ax_raw_image = fig.add_subplot(g0[-2:, 1:])
     image_path = os.path.join(images_root, image_filename)
     img = np.array(Image.open(image_path).convert('RGB'))
-    ax_raw_image.imshow(img)
+    h, w = img.shape[0], img.shape[1]
+
+    img_ref = img.copy()
+    for j in range(num_gt_objs):
+        box_abs_coords_j = bboxes[j] * (w, h, w, h)
+        top_left, bottom_right = box_abs_coords_j[:2].astype(np.int64).tolist(), box_abs_coords_j[2:].astype(np.int64).tolist()
+        img_ref = cv2.rectangle(img_ref, tuple(top_left), tuple(bottom_right), (255, 0, 255), 1)
+    ax_raw_image.imshow(img_ref)
     ax_raw_image.set_axis_off()
 
     ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
@@ -377,23 +385,25 @@ def plot_word_img_attn_objs(
     bx.set_yticklabels(bx.get_yticklabels(), rotation = 0, fontsize = 12)
 
 
-    h, w = img.shape[0], img.shape[1]
+    # h, w = img.shape[0], img.shape[1]
     for i in range(num_steps):
         img_i = img.copy()
         ax_i = ax_images[i]
 
         gt_obbs_attn_i = mid_outputs['kb_attn'][i][0]
         low, high = gt_obbs_attn_i.min().item(), gt_obbs_attn_i.max().item()
+        top = gt_obbs_attn_i.topk(4).values[-1].item()
         for j in range(num_gt_objs):
             box_attn_ij = gt_obbs_attn_i[j].item()
-            box_abs_coords_j = bboxes[j] * (w, h, w, h)
-            top_left, bottom_right = box_abs_coords_j[:2].astype(np.int64).tolist(), box_abs_coords_j[2:].astype(np.int64).tolist()
+            if box_attn_ij >= top:
+                box_abs_coords_j = bboxes[j] * (w, h, w, h)
+                top_left, bottom_right = box_abs_coords_j[:2].astype(np.int64).tolist(), box_abs_coords_j[2:].astype(np.int64).tolist()
 
-            score = interpolate(box_attn_ij, low, high)
-            c_intensity = 255 * score
-            linewidth = 2 + (4 * score)
+                score = interpolate(box_attn_ij, low, high)
+                c_intensity = 255 * score
+                linewidth = (4 * score)
 
-            img_i = cv2.rectangle(img_i, tuple(top_left), tuple(bottom_right), (0, math.ceil(c_intensity), 0), int(round(linewidth)))
+                img_i = cv2.rectangle(img_i, tuple(top_left), tuple(bottom_right), (math.ceil(c_intensity), 0, 0), int(round(linewidth)))
 
         ax_i.imshow(img_i)
         if i == (num_steps - 1):
