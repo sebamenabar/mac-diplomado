@@ -1,5 +1,5 @@
 *.DS_Store
-scratch_nbs/
+# scratch_nbs/
 data/
 
 # Byte-compiled / optimized / DLL files
