@@ -19,7 +19,11 @@ TRAIN:
 DATASET:
     DATASET: 'gqa'
     DATA_DIR: '/Users/sebamenabar/Documents/datasets/GQA/data'
-
+    params:
+        feats_fname: 'gqa_objects_gt.h5'
+        info_fname: 'gqa_objects_gt.json'
+        objects_feats_dset_name: 'roi_head_features'
+        objects_bboxes_dset_name: 'boxes'
 model:
     max_step: 4
     separate_syntax_semantics: False

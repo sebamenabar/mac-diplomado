@@ -111,7 +111,18 @@ def qonly_collate_fn(batch):
 
 
 class GQADataset(data.Dataset):
-    def __init__(self, data_dir, split='train', sample=False, use_feats='spatial'):
+    def __init__(
+            self,
+            data_dir,
+            split='train',
+            sample=False,
+            use_feats='spatial',
+            feats_fname='',
+            info_fname='',
+            spatial_feats_dset_name='features',
+            objects_feats_dset_name='features',
+            objects_bboxes_dset_name='bboxes',
+        ):
 
         self.use_feats = use_feats
         self.sample = sample
@@ -119,16 +130,25 @@ class GQADataset(data.Dataset):
             sample = '_sample'
         else:
             sample = ''
+
         with open(os.path.join(data_dir, '{}{}.pkl'.format(split, sample)), 'rb') as f:
             self.data = pickle.load(f)
-        with open(os.path.join(data_dir, f'gqa_{self.use_feats}_merged_info.json')) as f:
+
+        if feats_fname == '':
+            feats_fname = f'gqa_{self.use_feats}.h5'
+        if info_fname == '':
+            info_fname = f'gqa_{self.use_feats}_merged_info.json'
+        feats_fname = os.path.join(data_dir, feats_fname)
+        info_fname = os.path.join(data_dir, info_fname)
+
+        self.features = h5py.File(feats_fname, 'r')
+        with open(os.path.join(data_dir, info_fname), 'r') as f:
             self.info = json.load(f)
-        self.features = h5py.File(os.path.join(data_dir, f'gqa_{self.use_feats}.h5'), 'r')
-        
+
         if self.use_feats == 'spatial':
-            self.features = self.features['features']
+            self.features = self.features[spatial_feats_dset_name]
         elif self.use_feats == 'objects':
-            self.features, self.bboxes = self.features['features'], self.features['bboxes']
+            self.features, self.bboxes = self.features[objects_feats_dset_name], self.features[objects_bboxes_dset_name]
 
     def __getitem__(self, index):
         imgid, question, answer, group, questionid = self.data[index]

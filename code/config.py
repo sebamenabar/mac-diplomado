@@ -50,7 +50,13 @@ __C.DATASET = edict()
 __C.DATASET.DATASET = 'clevr'
 __C.DATASET.DATA_DIR = ''
 __C.DATASET.COGENT = ''
-# __C.DATASET = dict(__C.DATASET)
+__C.DATASET.params = edict(
+    feats_fname='',
+    info_fname='',
+    spatial_feats_dset_name='features',
+    objects_feats_dset_name='features',
+    objects_bboxes_dset_name='bboxes'
+)
 __C.model = edict(
     init_mem='random',
     max_step=4,

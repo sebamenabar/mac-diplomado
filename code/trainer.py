@@ -84,11 +84,11 @@ class Trainer():
                 print(f'Using CoGenT {cogent.upper()}')
 
             if cfg.TRAIN.FLAG:
-                self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample)
+                self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample, **cfg.DATASET.params)
                 self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                                             num_workers=cfg.WORKERS, drop_last=True, collate_fn=clevr_collate_fn)
             
-            self.dataset_val = ClevrDataset(data_dir=self.data_dir, split=eval_split + cogent, sample=sample)
+            self.dataset_val = ClevrDataset(data_dir=self.data_dir, split=eval_split + cogent, sample=sample, **cfg.DATASET.params)
             self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
                                             shuffle=False, num_workers=cfg.WORKERS, collate_fn=clevr_collate_fn)
 
@@ -98,11 +98,11 @@ class Trainer():
             elif self.use_feats == 'objects':
                 gqa_collate_fn = collate_fn_gqa_objs
             if cfg.TRAIN.FLAG:
-                self.dataset = GQADataset(data_dir=self.data_dir, split="train", sample=sample, use_feats=self.use_feats)
+                self.dataset = GQADataset(data_dir=self.data_dir, split="train", sample=sample, use_feats=self.use_feats, **cfg.DATASET.params)
                 self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                                             num_workers=cfg.WORKERS, drop_last=True, collate_fn=gqa_collate_fn)
             
-            self.dataset_val = GQADataset(data_dir=self.data_dir, split=eval_split, sample=sample, use_feats=self.use_feats)
+            self.dataset_val = GQADataset(data_dir=self.data_dir, split=eval_split, sample=sample, use_feats=self.use_feats, **cfg.DATASET.params)
             self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, shuffle=False,
                                         num_workers=cfg.WORKERS, drop_last=False, collate_fn=gqa_collate_fn)
 
