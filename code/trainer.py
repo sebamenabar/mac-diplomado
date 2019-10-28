@@ -158,7 +158,7 @@ class Trainer():
                 self.comet_exp.log_asset(cfg.cfg_file)
 
         with open(os.path.join(self.path, 'cfg.json'), 'w') as f:
-            json.dump(cfg, f)
+            json.dump(cfg, f, indent=4)
 
 
     def print_info(self):
