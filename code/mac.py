@@ -445,7 +445,6 @@ class InputUnit(nn.Module):
             if self.num_gt_lobs > 0:
                 gt_lobs = self.gt_lobs.expand(b_size, *self.gt_lobs.size())
                 img = torch.cat([img, gt_lobs], dim=1)
-                print(img.size())
 
         elif self.use_feats == 'objects':
             if self.num_gt_lobs > 0:

@@ -56,7 +56,8 @@ __C.DATASET.params = edict(
     info_fname='',
     spatial_feats_dset_name='features',
     objects_feats_dset_name='features',
-    objects_bboxes_dset_name='bboxes'
+    objects_bboxes_dset_name='bboxes',
+    sample_size=100,
 )
 __C.model = edict(
     init_mem='random',
