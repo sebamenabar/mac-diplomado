@@ -27,17 +27,33 @@ from config import cfg
 
 
 class ClevrDataset(data.Dataset):
-    def __init__(self, data_dir, split='train', sample=False):
+    def __init__(
+            self,
+            data_dir,
+            split='train',
+            sample=False,
+            sample_size=100,
+
+            # Compatibility only
+            feats_fname='',
+            info_fname='',
+            spatial_feats_dset_name='features',
+            objects_feats_dset_name='features',
+            objects_bboxes_dset_name='bboxes',
+        ):
 
         self.sample = sample
-        if sample:
-            sample = '_sample'
-        else:
-            sample = ''
-        with open(os.path.join(data_dir, '{}{}.pkl'.format(split, sample)), 'rb') as f:
+        self.sample_size = sample_size
+
+        info_fpath = os.path.join(data_dir, '{}.pkl'.format(split))
+        with open(info_fpath, 'rb') as f:
             self.data = pickle.load(f)
-        # self.img = h5py.File(os.path.join(data_dir, '{}_features.h5'.format(split)), 'r')['features']
-        self.img = h5py.File(os.path.join(data_dir, '{}_features.hdf5'.format(split)), 'r')['data']
+
+        if feats_fname:
+            feats_fp = os.path.join(data_dir, feats_fname.format(split))
+        else:
+            feats_fp = os.path.join(data_dir, '{}_features.hdf5'.format(split))
+        self.img = h5py.File(feats_fp, 'r')[spatial_feats_dset_name]
 
     def __getitem__(self, index):
         imgfile, question, answer, family = self.data[index]
@@ -47,6 +63,8 @@ class ClevrDataset(data.Dataset):
         return img, question, len(question), answer, family
 
     def __len__(self):
+        if self.sample:
+            return self.sample_size
         return len(self.data)
 
 

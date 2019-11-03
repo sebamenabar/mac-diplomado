@@ -17,11 +17,18 @@ TRAIN:
     # MAX_STEPS: 4
 
 DATASET:
-    DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/CLEVR_v1.0/data'
+    DATASET: 'clevr'
+    DATA_DIR: '/Users/sebamenabar/Documents/datasets/CLEVR/CLEVR_Uni_v1.0/data'
+    train_split: 'train'
+    params:
+        spatial_feats_dset_name: 'data'
+        # feats_fname: ''
+        # info_fname: 'gqa_objects_gt.json'
 
 model:
     max_step: 4
     separate_syntax_semantics: False
+    num_gt_lobs: 1
     common:
         module_dim: 256
     input_unit:
@@ -31,8 +38,8 @@ model:
         separate_syntax_semantics_embeddings: False
     # control_unit:
     read_unit:
-        gate: True
-        num_lobs: 1
+        gate: False
+        num_lobs: 0
     write_unit:
         rtom: False
     # output_unit: 

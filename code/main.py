@@ -53,6 +53,7 @@ def parse_args():
     # Data
     parser.add_argument('--cogent', type=str)
     parser.add_argument('--dataset', type=str)
+    parser.add_argument('--train_split', type=str)
     parser.add_argument('--eval', default='')
     # parser.add_argument('--test', action='store_true')
     parser.add_argument('--sample', action='store_true')
@@ -115,6 +116,8 @@ if __name__ == "__main__":
         cfg.LOGDIR = args.logdir
     if args.dataset is not None:
         cfg.DATASET.DATASET = args.dataset
+    if args.train_split is not None:
+        cfg.DATASET.train_split = args.train_split
 
     if args.comet_project_name is not None:
         cfg.COMET_PROJECT_NAME = args.comet_project_name

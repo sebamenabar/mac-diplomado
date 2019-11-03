@@ -141,7 +141,9 @@ def cfg_to_exp_name(cfg):
     if control_feed_prev:
         exp_name += f'_cfp'
     if read_gate or use_feats == 'objs':
-        exp_name += f'_lobs{num_lobs}'
+        exp_name += f'_gatelobs{cfg.model.read_unit.num_lobs}'
+    if cfg.model.num_gt_lobs > 0:
+        exp_name += f'_gt{cfg.model.num_gt_lobs}'
     exp_name += f'_{write}'
     if use_feats:
         exp_name += f'_{use_feats}'

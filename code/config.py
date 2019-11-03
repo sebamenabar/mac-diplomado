@@ -50,12 +50,14 @@ __C.DATASET = edict()
 __C.DATASET.DATASET = 'clevr'
 __C.DATASET.DATA_DIR = ''
 __C.DATASET.COGENT = ''
+__C.DATASET.train_split = 'train'
 __C.DATASET.params = edict(
     feats_fname='',
     info_fname='',
     spatial_feats_dset_name='features',
     objects_feats_dset_name='features',
-    objects_bboxes_dset_name='bboxes'
+    objects_bboxes_dset_name='bboxes',
+    sample_size=100,
 )
 __C.model = edict(
     init_mem='random',
