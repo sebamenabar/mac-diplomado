@@ -28,6 +28,7 @@ DATASET:
 model:
     max_step: 4
     separate_syntax_semantics: False
+    num_gt_lobs: 1
     common:
         module_dim: 256
     input_unit:
