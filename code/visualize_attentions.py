@@ -261,7 +261,7 @@ def plot_word_img_attn(
         ax_images.append(fig.add_subplot(g0[i, 1]))
         ax_images.append(fig.add_subplot(g0[i, 2]))
 
-    table = np.array([t.numpy()[0].squeeze(-1)
+    table = np.array([t.detach().cpu().numpy()[0].squeeze(-1)
                       for t in mid_outputs['cw_attn']])
     steps = len(table)
     table = np.transpose(table)
@@ -331,7 +331,7 @@ def plot_word_img_attn_objs(
     ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
     ax_table_objs = fig.add_subplot(g0[math.ceil(grid_h / 2):, 0])
 
-    table_cw = np.array([t.numpy()[0].squeeze(-1) for t in mid_outputs['cw_attn']])
+    table_cw = np.array([t.detach().cpu().numpy()[0].squeeze(-1) for t in mid_outputs['cw_attn']])
     steps = len(table_cw)
     table_cw = np.transpose(table_cw)
     # words = nltk.word_tokenize(ds.questions[q_index]['question'])
@@ -356,7 +356,7 @@ def plot_word_img_attn_objs(
         ax_images.append(fig.add_subplot(g0[i, 1]))
         ax_images.append(fig.add_subplot(g0[i, 2]))
 
-    table_cw = np.array([t.numpy()[0].squeeze(-1) for t in mid_outputs['cw_attn']])
+    table_cw = np.array([t.detach().cpu().numpy()[0].squeeze(-1) for t in mid_outputs['cw_attn']])
     steps = len(table_cw)
     table_cw = np.transpose(table_cw)
     # words = nltk.word_tokenize(ds.questions[q_index]['question'])
@@ -365,7 +365,7 @@ def plot_word_img_attn_objs(
                                 index=words)
 
     objs_attn = torch.cat(mid_outputs['kb_attn'])
-    objs_attn = objs_attn.t().numpy()
+    objs_attn = objs_attn.t().detach().cpu().numpy()
     tableMap = pandas.DataFrame(data=objs_attn,
                                 columns=[i for i in range(1, num_steps + 1)],
                                 )
@@ -451,7 +451,7 @@ def plot_word_img_attn_lobs(
         ax_images.append(fig.add_subplot(g0[i, 1]))
         ax_images.append(fig.add_subplot(g0[i, 2]))
 
-    table_cw = np.array([t.numpy()[0].squeeze(-1) for t in mid_outputs['cw_attn']])
+    table_cw = np.array([t.detach().cpu().numpy()[0].squeeze(-1) for t in mid_outputs['cw_attn']])
     steps = len(table_cw)
     table_cw = np.transpose(table_cw)
     # words = nltk.word_tokenize(ds.questions[q_index]['question'])
@@ -485,7 +485,7 @@ def plot_word_img_attn_lobs(
         attn = torch.cat([torch.cat(mid_outputs['read_gate']), lobs_attn], dim=1)
     # elif read_gate:
     #     attn = mid_outputs['read_gate']
-        attn = attn.t().numpy()
+        attn = attn.t().detach().cpu().numpy()
         tableMap = pandas.DataFrame(data=attn,
                                     columns=[i for i in range(1, num_steps + 1)],
                                 )
