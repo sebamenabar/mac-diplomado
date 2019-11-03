@@ -50,6 +50,7 @@ __C.DATASET = edict()
 __C.DATASET.DATASET = 'clevr'
 __C.DATASET.DATA_DIR = ''
 __C.DATASET.COGENT = ''
+__C.DATASET.train_split = 'train'
 __C.DATASET.params = edict(
     feats_fname='',
     info_fname='',

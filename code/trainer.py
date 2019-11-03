@@ -77,6 +77,7 @@ class Trainer():
         self.dataloader = []
         self.use_feats = cfg.model.use_feats
         eval_split = cfg.EVAL if cfg.EVAL else 'val'
+        train_split = cfg.DATASET.train_split
         if cfg.DATASET.DATASET == 'clevr':
             clevr_collate_fn = collate_fn
             cogent = cfg.DATASET.COGENT
@@ -84,7 +85,7 @@ class Trainer():
                 print(f'Using CoGenT {cogent.upper()}')
 
             if cfg.TRAIN.FLAG:
-                self.dataset = ClevrDataset(data_dir=self.data_dir, split="train" + cogent, sample=sample, **cfg.DATASET.params)
+                self.dataset = ClevrDataset(data_dir=self.data_dir, split=train_split + cogent, sample=sample, **cfg.DATASET.params)
                 self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                                             num_workers=cfg.WORKERS, drop_last=True, collate_fn=clevr_collate_fn)
             
@@ -98,7 +99,7 @@ class Trainer():
             elif self.use_feats == 'objects':
                 gqa_collate_fn = collate_fn_gqa_objs
             if cfg.TRAIN.FLAG:
-                self.dataset = GQADataset(data_dir=self.data_dir, split="train", sample=sample, use_feats=self.use_feats, **cfg.DATASET.params)
+                self.dataset = GQADataset(data_dir=self.data_dir, split=train_split, sample=sample, use_feats=self.use_feats, **cfg.DATASET.params)
                 self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
                                             num_workers=cfg.WORKERS, drop_last=True, collate_fn=gqa_collate_fn)
             
