@@ -153,7 +153,7 @@ class Trainer():
             self.comet_exp.set_name(exp_name)
             self.comet_exp.log_parameters(flatten_json_iterative_solution(cfg))
             self.comet_exp.log_asset(self.logfile)
-            self.comet_exp.log_asset_data(json.dumps(cfg), file_name='cfg.json')
+            self.comet_exp.log_asset_data(json.dumps(cfg, indent=4), file_name='cfg.json')
             self.comet_exp.set_model_graph(str(self.model))
             if cfg.cfg_file:
                 self.comet_exp.log_asset(cfg.cfg_file)
@@ -281,7 +281,9 @@ class Trainer():
 
         dict = {
             "loss": avg_loss,
-            "accuracy": train_accuracy
+            "accuracy": train_accuracy,
+            "avg_loss": avg_loss, # For commet
+            "avg_accuracy": train_accuracy, # For commet
         }
         return dict
 
