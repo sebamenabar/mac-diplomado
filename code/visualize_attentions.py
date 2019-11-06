@@ -15,29 +15,12 @@ import numpy as np
 from PIL import Image, ImageEnhance
 
 import torch
-from torch import nn
 
 import matplotlib
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize, LinearSegmentedColormap
-
-
-def get_im_features(impath):
-    img = PILImage.open(impath).convert('RGB')
-    img = transform(img)
-    img = img.to(device).unsqueeze(0)
-    features = resnet(img).detach()
-    return features
-
-
-def get_tokenized_question(question):
-    words = nltk.word_tokenize(question['question'])
-    question_token = []
-    for word in words:
-        question_token.append(word_dic[word])
-    return torch.tensor(question_token).unsqueeze(0)
 
 
 # +
@@ -101,13 +84,30 @@ def showTableAtt(table, words, tax=None):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def showImgAtt(img, atts, step, ax):
-    dx, dy = 0.05, 0.05
-    x = np.arange(-1.5, 1.5, dx)
-    y = np.arange(-1.0, 1.0, dy)
-    X, Y = np.meshgrid(x, y)
-    extent = np.min(x), np.max(x), np.min(y), np.max(y)
+dx, dy = 0.05, 0.05
+x = np.arange(-1.5, 1.5, dx)
+y = np.arange(-1.0, 1.0, dy)
+X, Y = np.meshgrid(x, y)
+extent = np.min(x), np.max(x), np.min(y), np.max(y)
 
+def show_img_att(img, att, ax, dim=None):
+    ax.cla()
+
+    if dim is None:
+        dim = int(math.sqrt(len(att)))
+    ax.imshow(img, interpolation="nearest", extent=extent)
+    ax.imshow(att.reshape((dim, dim)),
+              cmap=plt.get_cmap('custom'),
+              interpolation="bicubic",
+              extent=extent,
+              )
+
+    ax.set_axis_off()
+    plt.axis("off")
+    ax.set_aspect("auto")
+
+
+def showImgAtt(img, atts, step, ax):
     ax.cla()
 
     dim = int(math.sqrt(len(atts[0][0])))
@@ -127,7 +127,6 @@ def showImgAtt(img, atts, step, ax):
 
     ax.set_axis_off()
     plt.axis("off")
-
     ax.set_aspect("auto")
 
 
@@ -145,56 +144,6 @@ def showImgAtts(atts, impath):
         showImgAtt(img, atts, j, ax)
 
         plt.subplots_adjust(bottom=0, top=1, left=0, right=1)
-
-
-def rsetattr(obj, attr, val):
-    pre, _, post = attr.rpartition('.')
-    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
-
-# using wonder's beautiful simplification: https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-objects/31174427?noredirect=1#comment86638618_31174427
-
-
-def rgetattr(obj, attr, *args):
-    def _getattr(obj, attr):
-        return getattr(obj, attr, *args)
-    return functools.reduce(_getattr, [obj] + attr.split('.'))
-
-
-class IntermediateLayerGetter(nn.Module):
-    def __init__(self, model, return_layers, keep_output=True):
-        super().__init__()
-        self._model = model
-        self.return_layers = return_layers
-        self.keep_output = keep_output
-
-    def forward(self, *args, **kwargs):
-        ret = OrderedDict()
-        handles = []
-        for name, new_name in self.return_layers.items():
-            layer = rgetattr(self._model, name)
-
-            def hook(module, input, output, new_name=new_name):
-                if new_name in ret:
-                    if type(ret[new_name]) is list:
-                        ret[new_name].append(output)
-                    else:
-                        ret[new_name] = [ret[new_name], output]
-                else:
-                    ret[new_name] = output
-            h = layer.register_forward_hook(hook)
-            handles.append(h)
-
-        if self.keep_output:
-            output = self._model(*args, **kwargs)
-        else:
-            self._model(*args, **kwargs)
-            output = None
-
-        for h in handles:
-            h.remove()
-
-        return ret, output
-
 
 def setlabel(ax, label, loc=2, borderpad=0.6, **kwargs):
     legend = ax.get_legend()
@@ -235,65 +184,116 @@ def get_image(image_path, enhance=True):
 
     return image
 
-def plot_word_img_attn(
-        mid_outputs,
-        num_steps,
-        words,
-        images_root,
-        image_filename,
-        pred,
-        gt,
+def plot_table_attn(
+        ax, data, columns, index,
+        vmin=0, vmax=None, tick_position='top',
     ):
-    fig = plt.figure(figsize=(16, 2 * num_steps + 4))
-
-    g0 = gridspec.GridSpec((num_steps // 2) + 2, 3, figure=fig)
-
-    ax_raw_image = fig.add_subplot(g0[-2:, 1:])
-    image_path = os.path.join(images_root, image_filename)
-    img = image = Image.open(image_path).convert('RGB')
-    ax_raw_image.imshow(img)
-    ax_raw_image.set_axis_off()
-    # ax_raw_image.set_aspect("auto")
-
-    ax_table = fig.add_subplot(g0[:-1, 0])
-    ax_images = []
-    for i in range(num_steps // 2):
-        ax_images.append(fig.add_subplot(g0[i, 1]))
-        ax_images.append(fig.add_subplot(g0[i, 2]))
-
-    table = np.array([t.detach().cpu().numpy()[0].squeeze(-1)
-                      for t in mid_outputs['cw_attn']])
-    steps = len(table)
-    table = np.transpose(table)
-
-    tableMap = pandas.DataFrame(data=table,
-                                columns=[i for i in range(1, steps + 1)],
-                                index=words)
-
-    bx = sns.heatmap(tableMap,
-                     cmap="Greys",
-                     cbar=True,
-                     linewidths=.5,
-                     linecolor="gray",
-                     square=True,
-                     ax=ax_table,
-                     cbar_kws={"shrink": .5},
-                     )
+    df = pandas.DataFrame(data=data, columns=columns, index=index)
+    bx = sns.heatmap(
+        df,
+        cmap='Blues',
+        cbar=True,
+        linewidths=.5,
+        linecolor="gray",
+        square=True,
+        ax=ax,
+        cbar_kws={"shrink": .5},
+        vmin=0,
+        )
     bx.set_ylim(bx.get_ylim()[0] + 0.5, bx.get_ylim()[1] - 0.5)
+    bx.xaxis.set_ticks_position(tick_position)
     bx.set_yticklabels(bx.get_yticklabels(), rotation = 0, fontsize = 15)
 
+    return bx
 
-    for i in range(num_steps):
-        ax = ax_images[i]
-        showImgAtt(get_image(image_path),
-                   mid_outputs['kb_attn'], i, ax)
-        if i == (num_steps - 1):
-            setlabel(ax, f'{pred} ({gt.upper()})')
+def plot_vqa_attn(
+        img_fp,
+        num_steps,
+        # Question attention
+        words,
+        words_attn,
+        # For image attention
+        img_attn=None,
+        num_gt_lobs=0,
+        gt_lobs_attn=None,
+        # In case of read gate
+        num_lobs=0,
+        use_gate=False,
+        lobs_attn=None,
+        # Plot bboxes
+        bboxes=None,
+        bboxes_attn=None,
+        # Show prediction/answer on the plot
+        prediction='',
+        real_answer='',
+    ):
+    fig = plt.figure(figsize=(16, 2 * (num_steps + num_steps // 2) + 4)) # Width, height (2 per )
+    g0 = gridspec.GridSpec(math.ceil(num_steps / 2) + 2, 3, figure=fig)
+
+    grid_h = (num_steps // 2) + 2
+    if (num_gt_lobs > 0) or (num_lobs > 0) or (bboxes is not None):
+        index = []
+        if bboxes is not None:
+            # TODO
+            index += [f'Obj{i+1}' for i in range(len(bboxes))]
+            pass
         else:
-            setlabel(ax, str(i + 1))
+            objs_attn = img_attn.sum(axis=1)[..., np.newaxis]
+            index += ['Image']
+        if num_gt_lobs > 0:
+            objs_attn = np.concatenate([objs_attn, gt_lobs_attn], axis=1)
+            index += [f'gtLob{i+1}' for i in range(num_gt_lobs)]
+        if num_lobs > 0:
+            # TODO
+            pass
+        ax_table_objs = fig.add_subplot(g0[math.ceil(grid_h / 2): grid_h, 0])
+        plot_table_attn(
+            ax=ax_table_objs,
+            data=objs_attn.T,
+            columns=[str(i+1) for i in range(num_steps)],
+            index=index,
+            vmax=objs_attn.max(),
+        )
+        
+    ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
+    plot_table_attn(
+        ax=ax_table_cw,
+        data=words_attn.T,
+        columns=[str(i+1) for i in range(num_steps)],
+        index=words,
+    )
+    
+    ax_raw_image = fig.add_subplot(g0[-2:, 1:])
+    img = np.array(Image.open(img_fp).convert('RGB'))
+    ax_raw_image.imshow(img)
+    ax_raw_image.set_axis_off()
+        
+    ax_images = []
+    for i in range(math.floor(num_steps / 2)):
+        ax_images.append(fig.add_subplot(g0[i, 1]))
+        ax_images.append(fig.add_subplot(g0[i, 2]))
+    if num_steps % 2 == 1:
+        ax_images.append(fig.add_subplot(g0[i+1, 1]))
 
-    plt.tight_layout()
-    plt.show()
+    for ni in range(num_steps):
+        img_i = img.copy()
+        ax_i = ax_images[ni]
+        
+        if bboxes is not None:
+            # TODO
+            ax_i.imshow(img_i)
+        else:
+            show_img_att(img_i, img_attn[ni], ax_i)
+        
+        if ni == (num_steps - 1):
+            setlabel(ax_i, f'{prediction} ({real_answer.upper()})')
+        else:
+            setlabel(ax_i, str(ni + 1))
+
+        ax_i.set_axis_off()
+        ax_i.set_aspect("auto")
+
+    return fig
 
 def interpolate(val, x_low, x_high):
     return (val - x_low) / (x_high - x_low)
