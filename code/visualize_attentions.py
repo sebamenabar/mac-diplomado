@@ -160,7 +160,7 @@ def setlabel(ax, label, loc=2, borderpad=0.6, **kwargs):
         borderpad=borderpad,
         frameon=False,
         prop={
-            'size': 18,
+            'size': 22,
             'weight': 'bold',
 
         },
@@ -202,7 +202,7 @@ def plot_table_attn(
         )
     bx.set_ylim(bx.get_ylim()[0] + 0.5, bx.get_ylim()[1] - 0.5)
     bx.xaxis.set_ticks_position(tick_position)
-    bx.set_yticklabels(bx.get_yticklabels(), rotation = 0, fontsize = 15)
+    bx.set_yticklabels(bx.get_yticklabels(), rotation = 0, fontsize = 24)
 
     return bx
 
@@ -255,7 +255,8 @@ def plot_vqa_attn(
             vmax=objs_attn.max(),
         )
         
-    ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
+    # ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
+    ax_table_cw = fig.add_subplot(g0[:, 0])
     plot_table_attn(
         ax=ax_table_cw,
         data=words_attn.T,
