@@ -79,8 +79,15 @@ def load_vocab(cfg):
     def invert_dict(d):
         return {v: k for k, v in d.items()}
 
-    with open(os.path.join(cfg.DATASET.DATA_DIR, 'dic.pkl'), 'rb') as f:
-        dictionaries = pickle.load(f)
+    # with open(os.path.join(cfg.DATASET.DATA_DIR, 'dic.pkl'), 'rb') as f:
+    #     dictionaries = pickle.load(f)
+    import json
+    with open ("/storage1/samenabar/code/CLMAC/data_diplomado/answer_dic.json", "r") as f:
+        answer_dic = json.load(f)
+    with open ("/storage1/samenabar/code/CLMAC/data_diplomado/word_dic.json", "r") as f:
+        word_dic = json.load(f)
+
+    dictionaries = dict(answer_dic=answer_dic, word_dic=word_dic)
     vocab = {}
     vocab['question_token_to_idx'] = dictionaries["word_dic"]
     vocab['answer_token_to_idx'] = dictionaries["answer_dic"]

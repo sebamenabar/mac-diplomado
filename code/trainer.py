@@ -21,8 +21,67 @@ from tensorboardX import SummaryWriter
 
 import mac as mac
 from radam import RAdam
-from datasets import ClevrDataset, collate_fn, GQADataset, collate_fn_gqa, collate_fn_gqa_objs
-from utils import mkdir_p, save_model, load_vocab, cfg_to_exp_name, flatten_json_iterative_solution
+from datasets import (
+    ClevrDataset,
+    collate_fn,
+    GQADataset,
+    collate_fn_gqa,
+    collate_fn_gqa_objs,
+)
+from utils import (
+    mkdir_p,
+    save_model,
+    load_vocab,
+    cfg_to_exp_name,
+    flatten_json_iterative_solution,
+)
+
+
+import numpy as np
+import h5py
+from torch.utils.data import Dataset
+
+
+class CLEVRDataset(Dataset):
+    def __init__(
+        self,
+        h5_fp,
+        mapping,
+        questions,
+    ):
+        print("Using HARDCODED DATASET")
+        self.features = h5py.File(h5_fp, "r", libver="latest")["data"]
+        self.mapping = mapping
+        self.questions = questions
+
+    def __len__(self):
+        return len(self.questions)
+
+    def __getitem__(self, index):
+        img_filename, question, answer, qfamily = self.questions[index]
+        index = self.mapping[img_filename]
+        features = self.features[index]
+
+        return features, question, len(question), answer
+
+
+def collate_fn(batch):
+    features, questions, question_lengths, answers = list(zip(*batch))
+
+    order = np.argsort(question_lengths)[::-1]
+    features = [features[o] for o in order]
+    questions = [questions[o] for o in order]
+    question_lengths = [question_lengths[o] for o in order]
+    answers = [answers[o] for o in order]
+
+    return (
+        torch.as_tensor(np.stack(features, 0)),
+        torch.nn.utils.rnn.pad_sequence(
+            [torch.as_tensor(q) for q in questions], batch_first=True
+        ),
+        torch.as_tensor(question_lengths),
+        torch.as_tensor(answers),
+    )
 
 
 class Logger(object):
@@ -37,21 +96,21 @@ class Logger(object):
         self.log.flush()
 
     def flush(self):
-        #this flush method is needed for python 3 compatibility.
-        #this handles the flush command by doing nothing.
-        #you might want to specify some extra behavior here.
+        # this flush method is needed for python 3 compatibility.
+        # this handles the flush command by doing nothing.
+        # you might want to specify some extra behavior here.
         pass
 
 
-class Trainer():
+class Trainer:
     def __init__(self, log_dir, cfg):
 
         self.path = log_dir
         self.cfg = cfg
 
         if cfg.TRAIN.FLAG:
-            self.model_dir = os.path.join(self.path, 'Model')
-            self.log_dir = os.path.join(self.path, 'Log')
+            self.model_dir = os.path.join(self.path, "Model")
+            self.log_dir = os.path.join(self.path, "Log")
             mkdir_p(self.model_dir)
             mkdir_p(self.log_dir)
             self.writer = SummaryWriter(log_dir=self.log_dir)
@@ -62,7 +121,7 @@ class Trainer():
         self.max_epochs = cfg.TRAIN.MAX_EPOCHS
         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
 
-        s_gpus = cfg.GPU_ID.split(',')
+        s_gpus = cfg.GPU_ID.split(",")
         self.gpus = [int(ix) for ix in s_gpus]
         self.num_gpus = len(self.gpus)
 
@@ -76,41 +135,129 @@ class Trainer():
         self.dataset = []
         self.dataloader = []
         self.use_feats = cfg.model.use_feats
-        eval_split = cfg.EVAL if cfg.EVAL else 'val'
+        eval_split = cfg.EVAL if cfg.EVAL else "val"
         train_split = cfg.DATASET.train_split
-        if cfg.DATASET.DATASET == 'clevr':
+        if cfg.DATASET.DATASET == "clevr":
             clevr_collate_fn = collate_fn
             cogent = cfg.DATASET.COGENT
             if cogent:
-                print(f'Using CoGenT {cogent.upper()}')
+                print(f"Using CoGenT {cogent.upper()}")
+
+            with open("/storage1/samenabar/code/CLMAC/data_diplomado/train_mapping.json", "r") as f:
+                train_mapping = json.load(f)
+            with open("/storage1/samenabar/code/CLMAC/data_diplomado/val_mapping.json", "r") as f:
+                val_mapping = json.load(f)
+
+            import pickle
+
+            with open("/storage1/samenabar/code/CLMAC/data_diplomado/processed_train_questions.pkl", "rb") as f:
+                train_questions = pickle.load(f)
+
+            with open("/storage1/samenabar/code/CLMAC/data_diplomado/processed_val_questions.pkl", "rb") as f:
+                val_questions = pickle.load(f)
 
             if cfg.TRAIN.FLAG:
-                self.dataset = ClevrDataset(data_dir=self.data_dir, split=train_split + cogent, sample=sample, **cfg.DATASET.params)
-                self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
-                                            num_workers=cfg.WORKERS, drop_last=True, collate_fn=clevr_collate_fn)
-            
-            self.dataset_val = ClevrDataset(data_dir=self.data_dir, split=eval_split + cogent, sample=sample, **cfg.DATASET.params)
-            self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, drop_last=False,
-                                            shuffle=False, num_workers=cfg.WORKERS, collate_fn=clevr_collate_fn)
+                # self.dataset = ClevrDataset(
+                #     data_dir=self.data_dir,
+                #     split=train_split + cogent,
+                #     sample=sample,
+                #     **cfg.DATASET.params,
+                # )
+                # self.dataloader = DataLoader(
+                #     dataset=self.dataset,
+                #     batch_size=cfg.TRAIN.BATCH_SIZE,
+                #     shuffle=True,
+                #     num_workers=cfg.WORKERS,
+                #     drop_last=True,
+                #     collate_fn=clevr_collate_fn,
+                # )
+                self.dataset = CLEVRDataset(
+                    "/storage1/samenabar/code/CLMAC/data_diplomado/train_features.h5",
+                    train_mapping,
+                    train_questions,
+                )
+                self.dataloader = DataLoader(
+                    self.dataset,
+                    batch_size=self.cfg.TRAIN.BATCH_SIZE,
+                    shuffle=True,
+                    num_workers=cfg.WORKERS,
+                    drop_last=True,
+                    collate_fn=collate_fn,
+                    pin_memory=True,
+                )
 
-        elif cfg.DATASET.DATASET == 'gqa':
-            if self.use_feats == 'spatial':
+            self.dataset_val = CLEVRDataset(
+                "/storage1/samenabar/code/CLMAC/data_diplomado/val_features.h5",
+                val_mapping,
+                val_questions,
+            )
+            self.dataloader_val = DataLoader(
+                self.dataset_val,
+                batch_size=self.cfg.TRAIN.BATCH_SIZE,
+                shuffle=False,
+                num_workers=cfg.WORKERS,
+                drop_last=False,
+                collate_fn=collate_fn,
+                pin_memory=True,
+            )
+
+            # self.dataset_val = ClevrDataset(
+            #     data_dir=self.data_dir,
+            #     split=eval_split + cogent,
+            #     sample=sample,
+            #     **cfg.DATASET.params,
+            # )
+            # self.dataloader_val = DataLoader(
+            #     dataset=self.dataset_val,
+            #     batch_size=cfg.TEST_BATCH_SIZE,
+            #     drop_last=False,
+            #     shuffle=False,
+            #     num_workers=cfg.WORKERS,
+            #     collate_fn=clevr_collate_fn,
+            # )
+
+        elif cfg.DATASET.DATASET == "gqa":
+            if self.use_feats == "spatial":
                 gqa_collate_fn = collate_fn_gqa
-            elif self.use_feats == 'objects':
+            elif self.use_feats == "objects":
                 gqa_collate_fn = collate_fn_gqa_objs
             if cfg.TRAIN.FLAG:
-                self.dataset = GQADataset(data_dir=self.data_dir, split=train_split, sample=sample, use_feats=self.use_feats, **cfg.DATASET.params)
-                self.dataloader = DataLoader(dataset=self.dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True,
-                                            num_workers=cfg.WORKERS, drop_last=True, collate_fn=gqa_collate_fn)
-            
-            self.dataset_val = GQADataset(data_dir=self.data_dir, split=eval_split, sample=sample, use_feats=self.use_feats, **cfg.DATASET.params)
-            self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=cfg.TEST_BATCH_SIZE, shuffle=False,
-                                        num_workers=cfg.WORKERS, drop_last=False, collate_fn=gqa_collate_fn)
+                self.dataset = GQADataset(
+                    data_dir=self.data_dir,
+                    split=train_split,
+                    sample=sample,
+                    use_feats=self.use_feats,
+                    **cfg.DATASET.params,
+                )
+                self.dataloader = DataLoader(
+                    dataset=self.dataset,
+                    batch_size=cfg.TRAIN.BATCH_SIZE,
+                    shuffle=True,
+                    num_workers=cfg.WORKERS,
+                    drop_last=True,
+                    collate_fn=gqa_collate_fn,
+                )
+
+            self.dataset_val = GQADataset(
+                data_dir=self.data_dir,
+                split=eval_split,
+                sample=sample,
+                use_feats=self.use_feats,
+                **cfg.DATASET.params,
+            )
+            self.dataloader_val = DataLoader(
+                dataset=self.dataset_val,
+                batch_size=cfg.TEST_BATCH_SIZE,
+                shuffle=False,
+                num_workers=cfg.WORKERS,
+                drop_last=False,
+                collate_fn=gqa_collate_fn,
+            )
 
         # load model
         self.vocab = load_vocab(cfg)
         self.model, self.model_ema = mac.load_MAC(cfg, self.vocab)
-            
+
         self.weight_moving_average(alpha=0)
         if cfg.TRAIN.RADAM:
             self.optimizer = RAdam(self.model.parameters(), lr=self.lr)
@@ -119,13 +266,13 @@ class Trainer():
 
         self.start_epoch = 0
         if cfg.resume_model:
-            location = 'cuda' if cfg.CUDA else 'cpu'
+            location = "cuda" if cfg.CUDA else "cpu"
             state = torch.load(cfg.resume_model, map_location=location)
-            self.model.load_state_dict(state['model'])
-            self.optimizer.load_state_dict(state['optim'])
-            self.start_epoch = state['iter'] + 1
+            self.model.load_state_dict(state["model"])
+            self.optimizer.load_state_dict(state["optim"])
+            self.start_epoch = state["iter"] + 1
             state = torch.load(cfg.resume_model_ema, map_location=location)
-            self.model_ema.load_state_dict(state['model'])
+            self.model_ema.load_state_dict(state["model"])
 
         if cfg.start_epoch is not None:
             self.start_epoch = cfg.start_epoch
@@ -143,8 +290,8 @@ class Trainer():
 
         self.comet_exp = Experiment(
             project_name=cfg.COMET_PROJECT_NAME,
-            api_key=os.getenv('COMET_API_KEY'),
-            workspace=os.getenv('COMET_WORKSPACE'),
+            api_key=os.getenv("COMET_API_KEY"),
+            workspace=os.getenv("COMET_WORKSPACE"),
             disabled=cfg.logcomet is False,
         )
         if cfg.logcomet:
@@ -153,17 +300,18 @@ class Trainer():
             self.comet_exp.set_name(exp_name)
             self.comet_exp.log_parameters(flatten_json_iterative_solution(cfg))
             self.comet_exp.log_asset(self.logfile)
-            self.comet_exp.log_asset_data(json.dumps(cfg, indent=4), file_name='cfg.json')
+            self.comet_exp.log_asset_data(
+                json.dumps(cfg, indent=4), file_name="cfg.json"
+            )
             self.comet_exp.set_model_graph(str(self.model))
             if cfg.cfg_file:
                 self.comet_exp.log_asset(cfg.cfg_file)
 
-        with open(os.path.join(self.path, 'cfg.json'), 'w') as f:
+        with open(os.path.join(self.path, "cfg.json"), "w") as f:
             json.dump(cfg, f, indent=4)
 
-
     def print_info(self):
-        print('Using config:')
+        print("Using config:")
         pprint.pprint(self.cfg)
         print("\n")
 
@@ -190,25 +338,35 @@ class Trainer():
             self.model_ema.eval()
 
     def reduce_lr(self):
-        epoch_loss = self.total_epoch_loss # / float(len(self.dataset) // self.batch_size)
+        epoch_loss = (
+            self.total_epoch_loss
+        )  # / float(len(self.dataset) // self.batch_size)
         lossDiff = self.prior_epoch_loss - epoch_loss
-        if ((lossDiff < 0.015 and self.prior_epoch_loss < 0.5 and self.lr > 0.00002) or \
-            (lossDiff < 0.008 and self.prior_epoch_loss < 0.15 and self.lr > 0.00001) or \
-            (lossDiff < 0.003 and self.prior_epoch_loss < 0.10 and self.lr > 0.000005)):
+        if (
+            (lossDiff < 0.015 and self.prior_epoch_loss < 0.5 and self.lr > 0.00002)
+            or (lossDiff < 0.008 and self.prior_epoch_loss < 0.15 and self.lr > 0.00001)
+            or (
+                lossDiff < 0.003 and self.prior_epoch_loss < 0.10 and self.lr > 0.000005
+            )
+        ):
             self.lr *= 0.5
             print("Reduced learning rate to {}".format(self.lr))
             for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.lr
+                param_group["lr"] = self.lr
         self.prior_epoch_loss = epoch_loss
         self.total_epoch_loss = 0
 
     def save_models(self, iteration):
-        save_model(self.model, self.optimizer, iteration, self.model_dir, model_name="model")
-        save_model(self.model_ema, None, iteration, self.model_dir, model_name="model_ema")
+        save_model(
+            self.model, self.optimizer, iteration, self.model_dir, model_name="model"
+        )
+        save_model(
+            self.model_ema, None, iteration, self.model_dir, model_name="model_ema"
+        )
 
     def train_epoch(self, epoch):
         cfg = self.cfg
-        total_loss = 0.
+        total_loss = 0.0
         total_correct = 0
         total_samples = 0
 
@@ -221,18 +379,25 @@ class Trainer():
             ######################################################
             # (1) Prepare training data
             ######################################################
-            image, question, question_len, answer = data['image'], data['question'], data['question_length'], data['answer']
-            answer = answer.long()
-            question = Variable(question)
-            answer = Variable(answer)
+            # image, question, question_len, answer = (
+            #     data["image"],
+            #     data["question"],
+            #     data["question_length"],
+            #     data["answer"],
+            # )
+            image, question, question_len, answer = data
+            # answer = answer.long()
+            # question = Variable(question)
+            # answer = Variable(answer)
 
             if cfg.CUDA:
-                if self.use_feats == 'spatial':
+                if self.use_feats == "spatial":
                     image = image.cuda()
-                elif self.use_feats == 'objects':
+                elif self.use_feats == "objects":
                     image = [e.cuda() for e in image]
                 question = question.cuda()
-                answer = answer.cuda().squeeze()
+                # answer = answer.cuda().squeeze()
+                answer = answer.cuda()
             else:
                 question = question
                 image = image
@@ -248,7 +413,9 @@ class Trainer():
             loss.backward()
 
             if self.cfg.TRAIN.CLIP_GRADS:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.TRAIN.CLIP)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.cfg.TRAIN.CLIP
+                )
 
             self.optimizer.step()
             self.weight_moving_average()
@@ -274,7 +441,9 @@ class Trainer():
             # self.total_epoch_loss += loss.item() * answer.size(0)
 
             dataset.set_description(
-                'Epoch: {}; Avg Loss: {:.5f}; Avg Train Acc: {:.5f}'.format(epoch + 1, avg_loss, train_accuracy)
+                "Epoch: {}; Avg Loss: {:.5f}; Avg Train Acc: {:.5f}".format(
+                    epoch + 1, avg_loss, train_accuracy
+                )
             )
 
         self.total_epoch_loss = avg_loss
@@ -282,8 +451,8 @@ class Trainer():
         dict = {
             "loss": avg_loss,
             "accuracy": train_accuracy,
-            "avg_loss": avg_loss, # For commet
-            "avg_accuracy": train_accuracy, # For commet
+            "avg_loss": avg_loss,  # For commet
+            "avg_accuracy": train_accuracy,  # For commet
         }
         return dict
 
@@ -295,28 +464,35 @@ class Trainer():
             with self.comet_exp.train():
                 dict = self.train_epoch(epoch)
                 self.reduce_lr()
-                dict['epoch'] = epoch + 1
-                dict['lr'] = self.lr
-                self.comet_exp.log_metrics(dict, epoch=epoch + 1,)
+                dict["epoch"] = epoch + 1
+                dict["lr"] = self.lr
+                self.comet_exp.log_metrics(
+                    dict,
+                    epoch=epoch + 1,
+                )
 
             with self.comet_exp.validate():
                 dict = self.log_results(epoch, dict)
-                dict['epoch'] = epoch + 1
-                dict['lr'] = self.lr
-                self.comet_exp.log_metrics(dict, epoch=epoch + 1,)
-
+                dict["epoch"] = epoch + 1
+                dict["lr"] = self.lr
+                self.comet_exp.log_metrics(
+                    dict,
+                    epoch=epoch + 1,
+                )
 
             if cfg.TRAIN.EALRY_STOPPING:
                 if epoch - cfg.TRAIN.PATIENCE == self.previous_best_epoch:
-                # if epoch - cfg.TRAIN.PATIENCE == self.previous_best_loss_epoch:
-                    print('Early stop')
+                    # if epoch - cfg.TRAIN.PATIENCE == self.previous_best_loss_epoch:
+                    print("Early stop")
                     break
 
         self.comet_exp.log_asset(self.logfile)
         self.save_models(self.max_epochs)
         self.writer.close()
         print("Finished Training")
-        print(f"Highest validation accuracy: {self.previous_best_acc} at epoch {self.previous_best_epoch}")
+        print(
+            f"Highest validation accuracy: {self.previous_best_acc} at epoch {self.previous_best_epoch}"
+        )
 
     def log_results(self, epoch, dict, max_eval_samples=None):
         epoch += 1
@@ -324,19 +500,22 @@ class Trainer():
         self.writer.add_scalar("train_accuracy", dict["accuracy"], epoch)
 
         metrics = self.calc_accuracy("validation", max_samples=max_eval_samples)
-        self.writer.add_scalar("val_accuracy_ema", metrics['acc_ema'], epoch)
-        self.writer.add_scalar("val_accuracy", metrics['acc'], epoch)
-        self.writer.add_scalar("val_loss_ema", metrics['loss_ema'], epoch)
-        self.writer.add_scalar("val_loss", metrics['loss'], epoch)
+        self.writer.add_scalar("val_accuracy_ema", metrics["acc_ema"], epoch)
+        self.writer.add_scalar("val_accuracy", metrics["acc"], epoch)
+        self.writer.add_scalar("val_loss_ema", metrics["loss_ema"], epoch)
+        self.writer.add_scalar("val_loss", metrics["loss"], epoch)
 
-        print("Epoch: {epoch}\tVal Acc: {acc},\tVal Acc EMA: {acc_ema},\tAvg Loss: {loss},\tAvg Loss EMA: {loss_ema},\tLR: {lr}".
-              format(epoch=epoch, lr=self.lr, **metrics))
+        print(
+            "Epoch: {epoch}\tVal Acc: {acc},\tVal Acc EMA: {acc_ema},\tAvg Loss: {loss},\tAvg Loss EMA: {loss_ema},\tLR: {lr}".format(
+                epoch=epoch, lr=self.lr, **metrics
+            )
+        )
 
-        if metrics['acc'] > self.previous_best_acc:
-            self.previous_best_acc = metrics['acc']
+        if metrics["acc"] > self.previous_best_acc:
+            self.previous_best_acc = metrics["acc"]
             self.previous_best_epoch = epoch
-        if metrics['loss'] < self.previous_best_loss:
-            self.previous_best_loss = metrics['loss']
+        if metrics["loss"] < self.previous_best_loss:
+            self.previous_best_loss = metrics["loss"]
             self.previous_best_loss_epoch = epoch
 
         if epoch % self.snapshot_interval == 0:
@@ -357,23 +536,30 @@ class Trainer():
         total_correct = 0
         total_correct_ema = 0
         total_samples = 0
-        total_loss = 0.
-        total_loss_ema = 0.
+        total_loss = 0.0
+        total_loss_ema = 0.0
         pbar = tqdm(loader, total=len(loader), desc=mode.upper(), ncols=20)
         for data in pbar:
 
-            image, question, question_len, answer = data['image'], data['question'], data['question_length'], data['answer']
-            answer = answer.long()
-            question = Variable(question)
-            answer = Variable(answer)
+            # image, question, question_len, answer = (
+            #     data["image"],
+            #     data["question"],
+            #     data["question_length"],
+            #     data["answer"],
+            # )
+            image, question, question_len, answer = data
+            # answer = answer.long()
+            # question = Variable(question)
+            # answer = Variable(answer)
 
             if self.cfg.CUDA:
-                if self.use_feats == 'spatial':
+                if self.use_feats == "spatial":
                     image = image.cuda()
-                elif self.use_feats == 'objects':
+                elif self.use_feats == "objects":
                     image = [e.cuda() for e in image]
                 question = question.cuda()
                 answer = answer.cuda().squeeze()
+                answer = answer.cuda()
 
             with torch.no_grad():
                 scores = self.model(image, question, question_len)
@@ -381,7 +567,6 @@ class Trainer():
 
                 loss = self.loss_fn(scores, answer)
                 loss_ema = self.loss_fn(scores_ema, answer)
-
 
             correct = scores.detach().argmax(1) == answer
             correct_ema = scores_ema.detach().argmax(1) == answer
@@ -398,17 +583,16 @@ class Trainer():
             avg_acc_ema = total_correct_ema / total_samples
             avg_loss = total_loss / total_samples
             avg_loss_ema = total_loss_ema / total_samples
-            
-            pbar.set_postfix({
-                'Acc': f'{avg_acc:.5f}',
-                'Acc Ema': f'{avg_acc_ema:.5f}',
-                'Loss': f'{avg_loss:.5f}',
-                'Loss Ema': f'{avg_loss_ema:.5f}',
-            })
+
+            pbar.set_postfix(
+                {
+                    "Acc": f"{avg_acc:.5f}",
+                    "Acc Ema": f"{avg_acc_ema:.5f}",
+                    "Loss": f"{avg_loss:.5f}",
+                    "Loss Ema": f"{avg_loss_ema:.5f}",
+                }
+            )
 
         return dict(
-            acc=avg_acc,
-            acc_ema=avg_acc_ema,
-            loss=avg_loss,
-            loss_ema=avg_loss_ema
+            acc=avg_acc, acc_ema=avg_acc_ema, loss=avg_loss, loss_ema=avg_loss_ema
         )

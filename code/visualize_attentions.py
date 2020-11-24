@@ -242,7 +242,7 @@ def plot_vqa_attn(
             index += ['Image']
         if num_gt_lobs > 0:
             objs_attn = np.concatenate([objs_attn, gt_lobs_attn], axis=1)
-            index += [f'gtLob{i+1}' for i in range(num_gt_lobs)]
+            index += [f'gtLob{i + 1}' for i in range(num_gt_lobs)]
         if num_lobs > 0:
             # TODO
             pass
@@ -254,9 +254,10 @@ def plot_vqa_attn(
             index=index,
             vmax=objs_attn.max(),
         )
+        ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
+    else:
+        ax_table_cw = fig.add_subplot(g0[:, 0])
         
-    # ax_table_cw = fig.add_subplot(g0[:math.ceil(grid_h / 2), 0])
-    ax_table_cw = fig.add_subplot(g0[:, 0])
     plot_table_attn(
         ax=ax_table_cw,
         data=words_attn.T,
@@ -515,3 +516,6 @@ def plot_word_img_attn_lobs(
 
 def idxs_to_question(idxs, mapping):
     return [mapping[idx] for idx in idxs]
+
+def question_to_idxs(question, mapping):
+    return [mapping[word] for word in question.split()]
